@@ -1,0 +1,58 @@
+/* Styles pour améliorer le rendu des tuiles scalées */
+.leaflet-tile-container .leaflet-tile {
+  /* Améliorer le rendu des images agrandies */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: pixelated;
+  
+  /* Transition fluide pour les changements de zoom */
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Pour les tuiles à très haut zoom */
+.leaflet-tile-container .leaflet-tile[src*="z=19"],
+.leaflet-tile-container .leaflet-tile[src*="z=20"],
+.leaflet-tile-container .leaflet-tile[src*="z=21"],
+.leaflet-tile-container .leaflet-tile[src*="z=22"] {
+  /* Rendu pixellisé net */
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  
+  /* Légère amélioration du contraste */
+  filter: contrast(1.05) saturate(1.05) brightness(1.02);
+}
+
+/* Animation de chargement des tuiles */
+.leaflet-tile-loading {
+  opacity: 0;
+}
+
+.leaflet-tile-loaded {
+  opacity: 1;
+}
+
+/* Éviter les espaces entre les tuiles lors du scaling */
+.leaflet-tile-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Améliorer la netteté sur les écrans haute densité */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .leaflet-tile-container .leaflet-tile {
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
+
+/* Style pour les tuiles d'erreur (ne devrait plus être utilisé) */
+.leaflet-tile-error {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Masquer les tuiles manquantes */
+.leaflet-tile[src=""] {
+  opacity: 0 !important;
+}
