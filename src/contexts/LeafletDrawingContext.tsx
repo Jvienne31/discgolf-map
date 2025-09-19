@@ -3,7 +3,7 @@ import { createContext, useContext, useReducer, ReactNode, useEffect, useRef } f
 // Types pour les éléments du parcours
 export interface CourseElement {
   id: string;
-  type: 'tee' | 'basket' | 'ob-zone' | 'hazard' | 'mandatory-line';
+  type: 'tee' | 'basket' | 'ob-zone' | 'hazard' | 'mandatory';
   holeNumber: number;
   position?: { lat: number; lng: number };
   path?: { lat: number; lng: number }[];
@@ -13,6 +13,7 @@ export interface CourseElement {
     color?: string;
     strokeWidth?: number;
     fillOpacity?: number;
+    angle?: number; // Ajout pour mandatory
   };
   leafletLayer?: any; // Référence vers l'objet Leaflet
 }
@@ -20,7 +21,7 @@ export interface CourseElement {
 export interface CourseHole {
   number: number;
   par: number;
-  distance?: number;
+  distance?: number; // distance tee -> panier (m)
   elements: CourseElement[];
 }
 
@@ -32,6 +33,8 @@ export interface LeafletDrawingState {
   isDrawing: boolean;
   tempPath: { lat: number; lng: number }[];
   map: any; // Référence vers la carte Leaflet
+  past: Omit<LeafletDrawingState, 'past' | 'future' | 'map'>[]; // historique (sans recursion)
+  future: Omit<LeafletDrawingState, 'past' | 'future' | 'map'>[];
 }
 
 // Actions
@@ -49,7 +52,9 @@ export type LeafletDrawingAction =
   | { type: 'CANCEL_DRAWING' }
   | { type: 'ADD_HOLE'; payload: number }
   | { type: 'DELETE_HOLE'; payload: number }
-  | { type: 'UPDATE_HOLE'; payload: { number: number; updates: Partial<CourseHole> } };
+  | { type: 'UPDATE_HOLE'; payload: { number: number; updates: Partial<CourseHole> } }
+  | { type: 'UNDO' }
+  | { type: 'REDO' };
 
 // État initial
 const initialState: LeafletDrawingState = {
@@ -65,10 +70,71 @@ const initialState: LeafletDrawingState = {
   selectedElement: null,
   isDrawing: false,
   tempPath: [],
-  map: null
+  map: null,
+  past: [],
+  future: []
+};
+
+// --- Helpers de sérialisation & snapshots sans références circulaires ---
+const cloneElementShallow = (e: CourseElement) => {
+  const { leafletLayer, ...rest } = e; // retirer référence Leaflet
+  return {
+    ...rest,
+    position: rest.position ? { ...rest.position } : undefined,
+    path: rest.path ? rest.path.map(p => ({ ...p })) : undefined,
+    properties: rest.properties ? { ...rest.properties } : undefined
+  } as CourseElement;
+};
+
+const cloneHoles = (holes: CourseHole[]): CourseHole[] => holes.map(h => ({
+  ...h,
+  elements: h.elements.map(cloneElementShallow)
+}));
+
+export const serializeState = (state: LeafletDrawingState) => {
+  const { holes, currentHole, drawingMode, selectedElement, isDrawing, tempPath } = state;
+  return {
+    holes: cloneHoles(holes),
+    currentHole,
+    drawingMode,
+    selectedElement,
+    isDrawing,
+    tempPath,
+    past: state.past.map(p => ({ ...p, holes: cloneHoles(p.holes) })),
+    future: state.future.map(f => ({ ...f, holes: cloneHoles(f.holes) })),
+    map: null
+  };
 };
 
 // Reducer
+const snapshot = (s: LeafletDrawingState) => {
+  const { holes, currentHole, drawingMode, selectedElement, isDrawing, tempPath } = s;
+  return { holes: cloneHoles(holes), currentHole, drawingMode, selectedElement, isDrawing, tempPath };
+};
+
+const pushHistory = (state: LeafletDrawingState): LeafletDrawingState => {
+  const pastEntry = snapshot(state);
+  return { ...state, past: [...state.past, pastEntry], future: [] };
+};
+
+const recomputeHoleDistance = (hole: CourseHole): CourseHole => {
+  const tee = hole.elements.find(e => e.type === 'tee' && e.position);
+  const basket = hole.elements.find(e => e.type === 'basket' && e.position);
+  if (tee && basket && tee.position && basket.position) {
+    const toRad = (d: number) => d * Math.PI / 180;
+    const R = 6371000;
+    const dLat = toRad(basket.position.lat - tee.position.lat);
+    const dLng = toRad(basket.position.lng - tee.position.lng);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(tee.position.lat))*Math.cos(toRad(basket.position.lat))*Math.sin(dLng/2)**2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const dist = Math.round(R * c);
+    return { ...hole, distance: dist };
+  }
+  return { ...hole, distance: undefined };
+};
+
+const recalcAllDistances = (holes: CourseHole[]): CourseHole[] => holes.map(h => recomputeHoleDistance(h));
+
 const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawingAction): LeafletDrawingState => {
   console.log('🔄 Action reçue dans le reducer:', action.type, 'payload' in action ? action.payload : 'pas de payload');
   
@@ -97,6 +163,7 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       };
 
     case 'ADD_ELEMENT':
+      state = pushHistory(state);
       const currentHoleIndex = state.holes.findIndex(h => h.number === state.currentHole);
       if (currentHoleIndex === -1) return state;
 
@@ -105,16 +172,18 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         ...updatedHoles[currentHoleIndex],
         elements: [...updatedHoles[currentHoleIndex].elements, action.payload]
       };
+      const holesWithDistance = recalcAllDistances(updatedHoles);
 
       return {
         ...state,
-        holes: updatedHoles,
+        holes: holesWithDistance,
         drawingMode: null,
         isDrawing: false,
         tempPath: []
       };
 
     case 'UPDATE_ELEMENT':
+      state = pushHistory(state);
       const holeIndex = state.holes.findIndex(h => 
         h.elements.some(e => e.id === action.payload.id)
       );
@@ -130,12 +199,10 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         ...action.payload.updates
       };
 
-      return {
-        ...state,
-        holes: updatedHolesForUpdate
-      };
+      return { ...state, holes: recalcAllDistances(updatedHolesForUpdate) };
 
     case 'DELETE_ELEMENT':
+      state = pushHistory(state);
       const holeWithElement = state.holes.findIndex(h => 
         h.elements.some(e => e.id === action.payload)
       );
@@ -149,11 +216,7 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         )
       };
 
-      return {
-        ...state,
-        holes: updatedHolesForDelete,
-        selectedElement: state.selectedElement === action.payload ? null : state.selectedElement
-      };
+      return { ...state, holes: recalcAllDistances(updatedHolesForDelete), selectedElement: state.selectedElement === action.payload ? null : state.selectedElement };
 
     case 'SELECT_ELEMENT':
       return {
@@ -193,6 +256,7 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       };
 
     case 'ADD_HOLE':
+      state = pushHistory(state);
       const newHole: CourseHole = {
         number: action.payload,
         par: 3,
@@ -205,6 +269,7 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       };
 
     case 'DELETE_HOLE':
+      state = pushHistory(state);
       if (state.holes.length <= 1) return state; // Garder au moins un trou
       
       const filteredHoles = state.holes.filter(h => h.number !== action.payload);
@@ -223,11 +288,26 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       };
 
     case 'UPDATE_HOLE': {
+      state = pushHistory(state);
       const idx = state.holes.findIndex(h => h.number === action.payload.number);
       if (idx === -1) return state;
       const holes = [...state.holes];
       holes[idx] = { ...holes[idx], ...action.payload.updates };
       return { ...state, holes };
+    }
+
+    case 'UNDO': {
+      if (state.past.length === 0) return state;
+      const prev = state.past[state.past.length - 1];
+      const newPast = state.past.slice(0, -1);
+      const futureEntry = snapshot(state);
+      return { ...state, ...prev, map: state.map, past: newPast, future: [futureEntry, ...state.future] } as LeafletDrawingState;
+    }
+    case 'REDO': {
+      if (state.future.length === 0) return state;
+      const [next, ...rest] = state.future;
+      const pastEntry = snapshot(state);
+      return { ...state, ...next, map: state.map, past: [...state.past, pastEntry], future: rest } as LeafletDrawingState;
     }
 
     default:
@@ -254,8 +334,27 @@ export const LeafletDrawingProvider = ({ children }: LeafletDrawingProviderProps
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem('dgmap_state_v1') : null;
       if (raw) {
         const parsed = JSON.parse(raw);
-        // Ne jamais restaurer l'objet map (non sérialisable)
-        parsed.map = null;
+        parsed.map = null; // Ne jamais restaurer l'objet map (non sérialisable)
+        if (!parsed.past) parsed.past = [];
+        if (!parsed.future) parsed.future = [];
+        // Recalcul distances pour compatibilité ascendante
+        parsed.holes = (parsed.holes || []).map((h: CourseHole) => ({ ...h }));
+        parsed.holes = parsed.holes.map((h: CourseHole) => {
+          // recompute distance
+          const tee = h.elements?.find((e: CourseElement) => e.type === 'tee' && e.position);
+          const basket = h.elements?.find((e: CourseElement) => e.type === 'basket' && e.position);
+            if (tee && basket && tee.position && basket.position) {
+              const toRad = (d: number) => d * Math.PI / 180;
+              const R = 6371000;
+              const dLat = toRad(basket.position.lat - tee.position.lat);
+              const dLng = toRad(basket.position.lng - tee.position.lng);
+              const a = Math.sin(dLat/2)**2 + Math.cos(toRad(tee.position.lat))*Math.cos(toRad(basket.position.lat))*Math.sin(dLng/2)**2;
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+              const dist = Math.round(R * c);
+              return { ...h, distance: dist };
+            }
+            return { ...h, distance: undefined };
+        });
         return parsed as LeafletDrawingState;
       }
     } catch {}
@@ -269,7 +368,7 @@ export const LeafletDrawingProvider = ({ children }: LeafletDrawingProviderProps
       loadedRef.current = true;
     }
     try {
-      const toSave = { ...state, map: null };
+      const toSave = serializeState(state);
       window.localStorage.setItem('dgmap_state_v1', JSON.stringify(toSave));
     } catch {}
   }, [state]);
@@ -305,8 +404,9 @@ export const getElementColor = (type: CourseElement['type'] | 'measure'): string
       return '#f44336'; // Rouge
     case 'hazard':
       return '#ff5722'; // Rouge-orange
-    case 'mandatory-line':
-      return '#9c27b0'; // Violet
+    // mandatory-line supprimé
+    case 'mandatory':
+      return '#009688'; // Cyan foncé pour mandatory
     case 'measure':
       return '#607d8b'; // Gris bleuté
     default:
@@ -324,8 +424,9 @@ export const getElementIcon = (type: CourseElement['type']): string => {
       return '❌';
     case 'hazard':
       return '⚠️';
-    case 'mandatory-line':
-      return '➡️';
+    // mandatory-line supprimé
+    case 'mandatory':
+      return '⬆️';
     default:
       return '📍';
   }

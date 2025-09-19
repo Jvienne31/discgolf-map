@@ -32,6 +32,7 @@ export interface ElementProperties {
   distance?: number;
   par?: number;
   difficulty?: 1 | 2 | 3 | 4 | 5;
+  angle?: number; // Ajout pour mandatory
 }
 
 export interface Tee extends CourseElement {

@@ -1,6 +1,6 @@
-import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField } from '@mui/material';
-import { useState } from 'react';
-import { Add, Remove, ArrowBack, ArrowForward } from '@mui/icons-material';
+import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment } from '@mui/material';
+import { useState, useEffect, useCallback } from 'react';
+import { Add, Remove, Save, Download, Undo, Redo, Image as ImageIcon } from '@mui/icons-material';
 import { 
   NearMe, 
   SportsMartialArts, 
@@ -11,10 +11,31 @@ import {
   TouchApp,
   Straighten
 } from '@mui/icons-material';
-import { useLeafletDrawing, CourseElement } from '../contexts/LeafletDrawingContext';
+import { useLeafletDrawing, CourseElement, serializeState } from '../contexts/LeafletDrawingContext';
 
 const DrawingToolsSidebar = () => {
   const { state, dispatch } = useLeafletDrawing();
+
+  // Raccourcis clavier Undo/Redo
+  const keyHandler = useCallback((e: KeyboardEvent) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === 'z') {
+      if (e.shiftKey) {
+        dispatch({ type: 'REDO' });
+      } else {
+        dispatch({ type: 'UNDO' });
+      }
+      e.preventDefault();
+    } else if (mod && e.key.toLowerCase() === 'y') {
+      dispatch({ type: 'REDO' });
+      e.preventDefault();
+    }
+  }, [dispatch]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', keyHandler);
+    return () => window.removeEventListener('keydown', keyHandler);
+  }, [keyHandler]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDeleteHole, setPendingDeleteHole] = useState<number | null>(null);
   const [importDialog, setImportDialog] = useState(false);
@@ -64,7 +85,7 @@ const DrawingToolsSidebar = () => {
       description: 'Dessiner une zone dangereuse'
     },
     {
-      type: 'mandatory-line' as const,
+  type: 'mandatory' as const,
       label: 'Mandatory',
       icon: <TrendingFlat />,
       description: 'Tracer une ligne obligatoire'
@@ -117,59 +138,103 @@ const DrawingToolsSidebar = () => {
     setPendingDeleteHole(null);
   };
 
-  // Distance tee -> panier (simple: premier tee et premier panier du trou)
+  // Trou courant (distance stockée déjà calculée côté reducer)
   const currentHoleData = state.holes.find(h => h.number === state.currentHole);
-  let teeBasketDistance: number | null = null;
-  if (currentHoleData) {
-    const tee = currentHoleData.elements.find(e => e.type === 'tee' && e.position);
-    const basket = currentHoleData.elements.find(e => e.type === 'basket' && e.position);
-    if (tee && basket && tee.position && basket.position) {
-      const R = 6371000; // m
-      const toRad = (d: number) => d * Math.PI / 180;
-      const dLat = toRad(basket.position.lat - tee.position.lat);
-      const dLng = toRad(basket.position.lng - tee.position.lng);
-      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(tee.position.lat))*Math.cos(toRad(basket.position.lat))*Math.sin(dLng/2)**2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      teeBasketDistance = Math.round(R * c);
+
+  // Sauvegarde manuelle (même si auto-save actif) pour feedback utilisateur
+  const manualSave = () => {
+    try {
+      const data = serializeState(state);
+      localStorage.setItem('dgmap_state_v1', JSON.stringify(data));
+      console.log('💾 Sauvegarde manuelle effectuée');
+    } catch (e) {
+      console.warn('Erreur sauvegarde', e);
     }
-  }
+  };
+
+  const exportJson = () => {
+    try {
+      const data = serializeState(state);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'parcours.json'; a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
+  };
 
   return (
     <>
     <Box sx={{ width: '100%' }}>
-      {/* Titre */}
-      <Typography 
-        variant="h6" 
-        gutterBottom
-        sx={{ 
-          color: '#2e7d32',
-          fontWeight: 'bold',
-          fontSize: '1rem',
-          mb: 2
-        }}
+      {/* Section : Trous du Parcours */}
+      <Typography variant="subtitle2" sx={{ fontWeight:'bold', mb:1 }}>Trous du Parcours</Typography>
+      <Stack direction="row" spacing={1} sx={{ mb:1 }}>
+        <Button size="small" startIcon={<Add />} variant="outlined" onClick={addHole}>Ajouter un trou</Button>
+        {holesSorted.length > 1 && (
+          <Tooltip title="Supprimer ce trou">
+            <span>
+              <IconButton size="small" color="error" onClick={removeCurrentHole} disabled={holesSorted.length <= 1}>
+                <Remove fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+      </Stack>
+      <Select
+        size="small"
+        value={state.currentHole}
+        onChange={(e) => dispatch({ type: 'SET_CURRENT_HOLE', payload: e.target.value as number })}
+        fullWidth
+        sx={{ mb:1 }}
       >
-        🛠️ Outils de Dessin
-      </Typography>
+        {holesSorted.map(h => (
+          <MenuItem key={h.number} value={h.number}>{`Trou ${h.number} - Par ${h.par}`}</MenuItem>
+        ))}
+      </Select>
+      {currentHoleData && (
+        <TextField
+          size="small"
+            label="Par"
+            type="number"
+            value={currentHoleData.par}
+            onChange={(e) => dispatch({ type: 'UPDATE_HOLE', payload: { number: currentHoleData.number, updates: { par: parseInt(e.target.value || '3', 10) } } })}
+            sx={{ width:120, mb:2 }}
+            inputProps={{ min:1, max:10 }}
+            InputProps={{ endAdornment: <InputAdornment position="end">par</InputAdornment> }}
+        />
+      )}
 
-      {/* Mode actuel */}
-      {state.drawingMode && (
-        <Box sx={{ mb: 2 }}>
-          <Chip
-            label={`Mode: ${tools.find(t => t.type === state.drawingMode)?.label || 'Inconnu'}`}
-            color="primary"
+      {/* Section : Outils */}
+      <Typography variant="subtitle2" sx={{ fontWeight:'bold', mt:1, mb:1 }}>Outils</Typography>
+      <Box sx={{ display:'flex', flexDirection:'column', gap:0.5 }}>
+        {tools.map(tool => (
+          <Button
+            key={tool.type || 'select'}
+            onClick={() => handleToolSelect(tool.type)}
+            variant={state.drawingMode === tool.type ? 'contained' : 'outlined'}
+            startIcon={tool.icon}
             size="small"
-            sx={{ mb: 1 }}
-          />
-          {state.isDrawing && (
-            <Chip
-              label="Dessin en cours..."
-              color="warning"
-              size="small"
-              sx={{ ml: 1 }}
-            />
-          )}
+            sx={{ justifyContent:'flex-start', fontSize:'0.75rem' }}
+          >{tool.label}</Button>
+        ))}
+        <Stack direction="row" spacing={1} sx={{ mt:0.5 }}>
+          <Tooltip title="Annuler (Ctrl+Z)"><span><IconButton size="small" onClick={() => dispatch({ type:'UNDO' })} disabled={state.past.length===0}><Undo fontSize="inherit" /></IconButton></span></Tooltip>
+          <Tooltip title="Rétablir (Ctrl+Y / Shift+Ctrl+Z)"><span><IconButton size="small" onClick={() => dispatch({ type:'REDO' })} disabled={state.future.length===0}><Redo fontSize="inherit" /></IconButton></span></Tooltip>
+        </Stack>
+      </Box>
+
+      {/* Mode & dessin en cours */}
+      {(state.drawingMode || state.isDrawing) && (
+        <Box sx={{ mt:1 }}>
+          {state.drawingMode && <Chip size="small" color="primary" label={`Mode: ${tools.find(t=>t.type===state.drawingMode)?.label || '—'}`} sx={{ mr:1 }} />}
+          {state.isDrawing && <Chip size="small" color="warning" label="Dessin..." />}
         </Box>
       )}
+
+      {state.isDrawing && (
+        <Button fullWidth size="small" color="error" variant="outlined" sx={{ mt:1 }} onClick={cancelDrawing}>Annuler le dessin</Button>
+      )}
+
       {/* Edition élément sélectionné */}
       {state.selectedElement && (() => {
         const hole = state.holes.find(h => h.elements.some(e => e.id === state.selectedElement));
@@ -199,162 +264,53 @@ const DrawingToolsSidebar = () => {
           </Box>
         );
       })()}
-
-      {/* Par du trou */}
-      <Box sx={{ mt: 2 }}>
-        <TextField
-          label="Par du trou"
-          size="small"
-          type="number"
-          value={currentHoleData?.par || 3}
-          onChange={(e) => dispatch({ type: 'UPDATE_HOLE', payload: { number: state.currentHole, updates: { par: parseInt(e.target.value || '3', 10) } } })}
-          sx={{ width: 140 }}
-          inputProps={{ min: 1, max: 10 }}
-        />
-      </Box>
-
-      {/* Export / Import */}
-      <Divider sx={{ my:2 }} />
-      <Typography variant="subtitle2" gutterBottom>💾 Export / Import</Typography>
-      <Stack direction="row" spacing={1} flexWrap="wrap">
-        <Button size="small" variant="outlined" onClick={() => {
-          try {
-            const data = { ...state, map: null };
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'parcours.json'; a.click();
-            URL.revokeObjectURL(url);
-          } catch {}
-        }}>Exporter</Button>
-        <Button size="small" variant="outlined" onClick={() => setImportDialog(true)}>Importer</Button>
-        <Button size="small" variant="outlined" color="warning" onClick={() => {
-          if (confirm('Réinitialiser le parcours ?')) {
-            localStorage.removeItem('dgmap_state_v1');
-            location.reload();
-          }
-        }}>Reset</Button>
-      </Stack>
-
-      {/* Outils principaux */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {tools.map((tool) => (
-          <Button
-            key={tool.type || 'select'}
-            onClick={() => handleToolSelect(tool.type)}
-            variant={state.drawingMode === tool.type ? 'contained' : 'outlined'}
-            startIcon={tool.icon}
-            sx={{ 
-              justifyContent: 'flex-start',
-              backgroundColor: state.drawingMode === tool.type ? '#4caf50' : undefined,
-              '&:hover': {
-                backgroundColor: state.drawingMode === tool.type ? '#45a049' : undefined,
-              },
-              fontSize: '0.85rem'
-            }}
-            title={tool.description}
-            fullWidth
-          >
-            {tool.label}
-          </Button>
-        ))}
-      </Box>
-
-      <Divider sx={{ my: 2 }} />
-
-      {/* Actions de dessin */}
-      {state.isDrawing && (
-        <Button
-          onClick={cancelDrawing}
-          variant="outlined"
-          color="error"
-          startIcon={<Clear />}
-          fullWidth
-          sx={{ mb: 2 }}
-        >
-          Annuler
-        </Button>
-      )}
-
       {/* Statistiques */}
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-          📊 Statistiques
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          • Trou actuel: {state.currentHole}
-        </Typography>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ my: 1, flexWrap:'wrap' }}>
-          <Tooltip title="Trou précédent">
-            <span>
-              <IconButton size="small" onClick={prevHole} disabled={currentIndex <= 0}>
-                <ArrowBack fontSize="inherit" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Select
-            size="small"
-            value={state.currentHole}
-            onChange={(e) => dispatch({ type: 'SET_CURRENT_HOLE', payload: e.target.value as number })}
-            sx={{ minWidth: 80 }}
-          >
-            {holesSorted.map(h => (
-              <MenuItem key={h.number} value={h.number}>Trou {h.number}</MenuItem>
-            ))}
-          </Select>
-          <Tooltip title="Trou suivant">
-            <span>
-              <IconButton size="small" onClick={nextHole} disabled={currentIndex >= holesSorted.length - 1}>
-                <ArrowForward fontSize="inherit" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Ajouter un nouveau trou">
-            <IconButton size="small" onClick={addHole} color="primary">
-              <Add fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-            <Tooltip title={holesSorted.length <= 1 ? 'Impossible (au moins 1 trou requis)' : 'Supprimer ce trou'}>
-              <span>
-                <IconButton size="small" onClick={removeCurrentHole} disabled={holesSorted.length <= 1} color="error">
-                  <Remove fontSize="inherit" />
-                </IconButton>
-              </span>
-            </Tooltip>
-        </Stack>
-        {currentHoleData && (
-          (() => {
+      {currentHoleData && (
+        <Box sx={{ mt:2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight:'bold', mb:1 }}>Statistiques</Typography>
+          {(() => {
             const elems = currentHoleData.elements;
             const tees = elems.filter(e => e.type === 'tee');
             const baskets = elems.filter(e => e.type === 'basket');
             return (
-              <>
-                <Typography variant="body2" color="text.secondary">• Éléments: {elems.length}</Typography>
-                <Typography variant="body2" color="text.secondary">• Tees: {tees.length}</Typography>
-                <Typography variant="body2" color="text.secondary">• Paniers: {baskets.length}</Typography>
-                {tees.length > 0 && baskets.length > 0 && teeBasketDistance !== null && (
-                  <Typography variant="body2" color="text.secondary">• Distance Tee→Panier: {teeBasketDistance} m</Typography>
-                )}
-              </>
+              <Box sx={{ fontSize:'0.75rem' }}>
+                <div>Éléments: {elems.length}</div>
+                <div>Tees: {tees.length}</div>
+                <div>Paniers: {baskets.length}</div>
+                <div>Distance: {currentHoleData.distance !== undefined ? `${currentHoleData.distance} m` : '—'}</div>
+              </Box>
             );
-          })()
-        )}
-      </Box>
+          })()}
+        </Box>
+      )}
 
-      {/* Instructions */}
+      {/* Instructions contextuelles */}
       {state.drawingMode && (
-        <Box sx={{ mt: 2, p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+        <Box sx={{ mt:1, p:1, background:'#f5f5f5', borderRadius:1 }}>
           <Typography variant="caption" color="text.secondary">
-            {state.drawingMode === 'tee' && '🎯 Tee: un seul clic pour placer.'}
-            {state.drawingMode === 'basket' && '🥏 Panier: un seul clic pour placer.'}
-            {state.drawingMode === 'mandatory-line' && '➡️ Mandatory: clic initial puis double‑clic pour terminer (min 2 points).'}
-            {state.drawingMode === 'ob-zone' && '❌ Zone OB: cliquez pour ajouter des sommets, double‑clic pour fermer (min 3 points).'}
-            {state.drawingMode === 'hazard' && '⚠️ Danger: cliquez pour ajouter des sommets, double‑clic pour fermer (min 3 points).'}
-            {state.drawingMode === 'measure' && '📏 Mesure: cliquez pour ajouter des points, double‑clic pour terminer. Aucune sauvegarde.'}
-            <br />Appuyez sur Échap pour annuler.
+            {state.drawingMode === 'tee' && '🎯 Tee: un clic pour placer.'}
+            {state.drawingMode === 'basket' && '🥏 Panier: un clic pour placer.'}
+            {state.drawingMode === 'mandatory' && '⬆️ Mandatory: cliquez sur la carte pour poser une flèche rouge.'}
+            {state.drawingMode === 'ob-zone' && '❌ Zone OB: clics successifs puis double‑clic pour fermer (min 3 points).'}
+            {state.drawingMode === 'hazard' && '⚠️ Danger: clics successifs puis double‑clic (min 3 points).'}
+            {state.drawingMode === 'measure' && '📏 Mesure: clics, double‑clic pour terminer (non sauvegardé).'}
+            <br/>Échap: annuler.
           </Typography>
         </Box>
       )}
+
+      {/* Actions */}
+      <Divider sx={{ my:2 }} />
+      <Typography variant="subtitle2" sx={{ fontWeight:'bold', mb:1 }}>Actions</Typography>
+      <Stack spacing={1}>
+        <Button size="small" variant="contained" color="success" startIcon={<Save />} onClick={manualSave}>Sauvegarder</Button>
+        <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportJson}>Exporter JSON</Button>
+        <Button size="small" variant="outlined" onClick={() => setImportDialog(true)}>Importer JSON</Button>
+        <Button size="small" variant="outlined" startIcon={<ImageIcon />} disabled>Exporter Image (à venir)</Button>
+        <Button size="small" variant="outlined" color="warning" onClick={() => {
+          if (confirm('Réinitialiser le parcours ?')) { localStorage.removeItem('dgmap_state_v1'); location.reload(); }
+        }}>Reset</Button>
+      </Stack>
     </Box>
     {/* Import dialog */}
     <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, ButtonGroup, Button } from '@mui/material';
+import { Box, ButtonGroup, Button, Slider } from '@mui/material';
 import { Satellite, Map as MapIcon, Terrain, Layers, HighQuality, Public } from '@mui/icons-material';
-import { useLeafletDrawing, CourseElement, generateElementId, getElementColor } from '../contexts/LeafletDrawingContext';
+import { useLeafletDrawing, CourseElement, CourseHole, generateElementId, getElementColor } from '../contexts/LeafletDrawingContext';
 import { layerConfigs, layerNames, BaseLayerKey } from '../utils/layers';
 import { debugLog } from '../utils/debug';
 
@@ -18,12 +18,82 @@ const DiagnosticMapComponent = () => {
 
   // (configs et noms extraits dans utils/layers.ts)
 
+  // Slider de rotation pour mandatory sélectionné
+  const selectedMandatory = drawingState.selectedElement
+    ? drawingState.holes.flatMap(h => h.elements).find(e => e.id === drawingState.selectedElement && e.type === 'mandatory')
+    : null;
+  const angleValue = selectedMandatory?.properties?.angle ?? 0;
+
   // Ref pour toujours disposer de l'état le plus récent dans les handlers Leaflet
   const drawingStateRef = useRef(drawingState);
   useEffect(() => { drawingStateRef.current = drawingState; }, [drawingState]);
-
   // Prévisualisation temporaire des formes en cours de dessin
   const tempShapeRef = useRef<any>(null);
+  // Registre des layers par id d'élément
+  const elementLayersRef = useRef<Record<string, any>>({});
+  // Handles for geometry editing (vertex markers)
+  const vertexMarkersRef = useRef<any[]>([]);
+  const [selectedVertexIdx, setSelectedVertexIdx] = useState<number | null>(null);
+
+  // ...existing code...
+  // ...existing code...
+
+
+  // Place geometry editing effect after all refs/hooks/variables
+  useEffect(() => {
+    vertexMarkersRef.current.forEach(m => { try { mapInstanceRef.current?.removeLayer(m); } catch {} });
+    vertexMarkersRef.current = [];
+    if (!mapInstanceRef.current || !drawingState.selectedElement) return;
+    const el = drawingState.holes.flatMap((h: CourseHole) => h.elements).find((e: CourseElement) => e.id === drawingState.selectedElement);
+    if (!el || !el.path || el.path.length < 2) return;
+    (async () => {
+      const L = (window as any).L || await import('leaflet');
+      if (!el.path) return;
+      el.path.forEach((pt: { lat: number; lng: number }, idx: number) => {
+        const isSelected = idx === selectedVertexIdx;
+        // Icône SVG ronde
+        const icon = L.divIcon({
+          html: `<svg width='18' height='18'><circle cx='9' cy='9' r='7' fill='${isSelected ? '#ffcdd2' : '#fff'}' stroke='${isSelected ? '#d32f2f' : '#1976d2'}' stroke-width='3'/></svg>`,
+          className: '',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        const marker = L.marker([pt.lat, pt.lng], {
+          icon,
+          draggable: isSelected
+        }).addTo(mapInstanceRef.current);
+        marker.on('mousedown', (ev: any) => {
+          if (L.DomEvent) L.DomEvent.stopPropagation(ev);
+        });
+        marker.on('click', (ev: any) => {
+          if (L.DomEvent) L.DomEvent.stopPropagation(ev);
+          setSelectedVertexIdx(idx);
+        });
+        if (isSelected) {
+          marker.on('dragend', () => {
+            const ll = marker.getLatLng();
+            const newPath = el.path!.map((p: { lat: number; lng: number }, i: number) => i === idx ? { lat: ll.lat, lng: ll.lng } : p);
+            drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { path: newPath } } });
+            setSelectedVertexIdx(idx); // Reste sélectionné après drag
+          });
+        }
+        marker.on('contextmenu', (ev: any) => {
+          ev.originalEvent?.preventDefault?.();
+          const min = 3;
+          if (el.path!.length > min) {
+            const newPath = el.path!.filter((_: { lat: number; lng: number }, i: number) => i !== idx);
+            drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { path: newPath } } });
+            setSelectedVertexIdx(null);
+          }
+        });
+        vertexMarkersRef.current.push(marker);
+      });
+    })();
+    return () => {
+      vertexMarkersRef.current.forEach(m => { try { mapInstanceRef.current?.removeLayer(m); } catch {} });
+      vertexMarkersRef.current = [];
+    };
+  }, [drawingState.selectedElement, drawingState.holes, drawingDispatch, selectedVertexIdx]);
 
   // Effet: mise à jour / création / suppression de la forme temporaire selon l'état de dessin
   useEffect(() => {
@@ -83,40 +153,109 @@ const DiagnosticMapComponent = () => {
 
   // Effet: mise à jour style/icône des éléments existants quand leurs propriétés changent
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    // Parcourir tous les éléments
-    drawingState.holes.forEach(hole => {
-      hole.elements.forEach(el => {
-        if (!el.leafletLayer) return;
-        const color = el.properties?.color || getElementColor(el.type);
-        // Point: recréer l'icône si couleur ou name change
-        if (el.type === 'tee' || el.type === 'basket') {
-          if (el.leafletLayer.setIcon) {
-            const glyph = el.type === 'tee' ? 'T' : 'B';
-            const L = (window as any).L; // si global disponible, sinon ignorer
-            if (L) {
-              const icon = L.divIcon({
-                html: `\n                  <div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">\n                    <svg viewBox='0 0 40 40' width='30' height='30'>\n                      <circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' />\n                      <text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text>\n                    </svg>\n                  </div>` ,
-                className: '',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
-              });
-              try { el.leafletLayer.setIcon(icon); } catch {}
-            }
-          }
-        } else {
-          // Ligne / zone: appliquer style
-            if (el.leafletLayer.setStyle) {
-              const style: any = { color };
-              if (el.type !== 'mandatory-line') {
-                style.fillColor = color;
-              }
-              try { el.leafletLayer.setStyle(style); } catch {}
-            }
+    const sync = async () => {
+      if (!mapInstanceRef.current) return;
+      const L = (window as any).L || await import('leaflet');
+      // Ensemble des ids présents dans l'état
+      const currentIds = new Set<string>();
+      drawingState.holes.forEach(hole => {
+        hole.elements.forEach(el => currentIds.add(el.id));
+      });
+
+      // Supprimer les layers orphelins (plus dans le state)
+      Object.keys(elementLayersRef.current).forEach(id => {
+        if (!currentIds.has(id)) {
+          try { mapInstanceRef.current.removeLayer(elementLayersRef.current[id]); } catch {}
+          delete elementLayersRef.current[id];
         }
       });
-    });
-  }, [drawingState.holes]);
+
+      // Créer ou mettre à jour les layers correspondants aux éléments du state
+      drawingState.holes.forEach(hole => {
+        hole.elements.forEach(el => {
+          const color = el.properties?.color || getElementColor(el.type);
+          const existing = elementLayersRef.current[el.id];
+          if (!existing) {
+            // Mandatory: marker flèche avec rotation
+            if (el.type === 'mandatory') {
+              if (!el.position) return;
+              const angle = (el.properties as import('../types/course-elements').ElementProperties)?.angle ?? 0;
+              const isSelected = drawingState.selectedElement === el.id;
+              const arrowIcon = L.divIcon({
+                html: `<div style="transform:rotate(${angle}deg);width:32px;height:32px;display:flex;align-items:center;justify-content:center;"><svg width='32' height='32' viewBox='0 0 32 32'><polygon points='8,16 24,16 18,10 18,13 8,13 8,19 18,19 18,22' fill='${isSelected ? '#ff1744' : color}' stroke='${isSelected ? '#d32f2f' : '#333'}' stroke-width='2'/></svg></div>`,
+                className: '', iconSize:[32,32], iconAnchor:[16,16]
+              });
+              const marker = L.marker([el.position.lat, el.position.lng], { icon: arrowIcon, draggable: true }).addTo(mapInstanceRef.current);
+              marker.on('dragend', () => {
+                const ll = marker.getLatLng();
+                drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
+                // Forcer le refresh de l'icône après déplacement
+                setTimeout(() => {
+                  if (marker.setIcon) marker.setIcon(arrowIcon);
+                }, 10);
+              });
+              marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: el.id }); });
+              marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: el.id }); });
+              elementLayersRef.current[el.id] = marker;
+            } else if (el.type === 'tee' || el.type === 'basket') {
+              if (!el.position) return;
+              const glyph = el.type === 'tee' ? 'T' : 'B';
+              const icon = L.divIcon({
+                html: `<div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg viewBox='0 0 40 40' width='30' height='30'><circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' /><text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text></svg></div>`,
+                className: '', iconSize:[30,30], iconAnchor:[15,15]
+              });
+              const marker = L.marker([el.position.lat, el.position.lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
+              marker.on('dragend', () => {
+                const ll = marker.getLatLng();
+                drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
+              });
+              marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: el.id }); });
+              marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: el.id }); });
+              elementLayersRef.current[el.id] = marker;
+            } else if ((el.type === 'ob-zone' || el.type === 'hazard') && el.path && el.path.length >= 2) {
+              const latlngs = el.path.map(p => [p.lat, p.lng]);
+              let layer = L.polygon(latlngs, { color, weight: el.properties?.strokeWidth || 2, fillOpacity: el.properties?.fillOpacity ?? 0.3, fillColor: color }).addTo(mapInstanceRef.current);
+              layer.on('click', () => drawingDispatch({ type: 'SELECT_ELEMENT', payload: el.id }));
+              elementLayersRef.current[el.id] = layer;
+            }
+          } else {
+            // Mettre à jour géométrie / style
+            if (el.type === 'mandatory' && el.position && existing.setLatLng && existing.setIcon) {
+              existing.setLatLng([el.position.lat, el.position.lng]);
+              const angle = el.properties?.angle ?? 0;
+              const isSelected = drawingState.selectedElement === el.id;
+              const arrowIcon = L.divIcon({
+                html: `<div style="transform:rotate(${angle}deg);width:32px;height:32px;display:flex;align-items:center;justify-content:center;"><svg width='32' height='32' viewBox='0 0 32 32'><polygon points='8,16 24,16 18,10 18,13 8,13 8,19 18,19 18,22' fill='${isSelected ? '#ff1744' : color}' stroke='${isSelected ? '#d32f2f' : '#333'}' stroke-width='2'/></svg></div>`,
+                className: '', iconSize:[32,32], iconAnchor:[16,16]
+              });
+              try { existing.setIcon(arrowIcon); } catch {}
+            } else if ((el.type === 'tee' || el.type === 'basket') && el.position) {
+              if (existing.setLatLng) { existing.setLatLng([el.position.lat, el.position.lng]); }
+              if (existing.setIcon) {
+                const glyph = el.type === 'tee' ? 'T' : 'B';
+                try {
+                  const icon = L.divIcon({
+                    html: `<div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg viewBox='0 0 40 40' width='30' height='30'><circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' /><text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text></svg></div>`,
+                    className:'', iconSize:[30,30], iconAnchor:[15,15]
+                  });
+                  existing.setIcon(icon);
+                } catch {}
+              }
+            } else if (el.path && existing.setLatLngs) {
+              const latlngs = el.path.map(p => [p.lat, p.lng]);
+              try { existing.setLatLngs(latlngs); } catch {}
+              if (existing.setStyle) {
+                const style: any = { color };
+                style.fillColor = color;
+                try { existing.setStyle(style); } catch {}
+              }
+            }
+          }
+        });
+      });
+    };
+    sync();
+  }, [drawingState.holes, drawingDispatch]);
 
   useEffect(() => {
     const initMap = async () => {
@@ -155,10 +294,44 @@ const DiagnosticMapComponent = () => {
             debugLog('🖱️ Click map -> mode:', ds.drawingMode);
             if (ds.drawingMode === 'tee' || ds.drawingMode === 'basket') {
               createPointElement(ds.drawingMode, { lat, lng }, L2);
-            } else if (ds.drawingMode && !ds.isDrawing) {
-              drawingDispatch({ type: 'START_DRAWING', payload: { lat, lng } });
-            } else if (ds.isDrawing) {
-              drawingDispatch({ type: 'CONTINUE_DRAWING', payload: { lat, lng } });
+            } else if (ds.drawingMode === 'mandatory') {
+              // Pose directe d'une flèche mandatory, sans path ni dessin
+              const element: CourseElement = {
+                id: generateElementId(),
+                type: 'mandatory',
+                holeNumber: ds.currentHole,
+                position: { lat, lng },
+                properties: {
+                  name: `mandatory ${ds.currentHole}`,
+                  color: getElementColor('mandatory'),
+                  strokeWidth: 6,
+                  fillOpacity: 1,
+                  angle: 0
+                } as import('../types/course-elements').ElementProperties
+              };
+              const color = 'red';
+              const angle = 0;
+              const icon = L2.divIcon({
+                html: `<div style="transform:rotate(${angle}deg);width:40px;height:40px;display:flex;align-items:center;justify-content:center;"><svg width='40' height='40' viewBox='0 0 40 40'><polygon points='10,20 36,20 28,10 28,15 10,15 10,25 28,25 28,30' fill='${color}' stroke='#333' stroke-width='4'/></svg></div>`,
+                className: '', iconSize:[40,40], iconAnchor:[20,20]
+              });
+              const marker = L2.marker([lat, lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
+              marker.on('dragend', () => {
+                const ll = marker.getLatLng();
+                drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: element.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
+              });
+              marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id }); });
+              marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: element.id }); });
+              element.leafletLayer = marker;
+              elementLayersRef.current[element.id] = marker;
+              drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
+            } else if (ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
+              // Premier clic : START_DRAWING, suivants : CONTINUE_DRAWING
+              if (!ds.isDrawing) {
+                drawingDispatch({ type: 'START_DRAWING', payload: { lat, lng } });
+              } else {
+                drawingDispatch({ type: 'CONTINUE_DRAWING', payload: { lat, lng } });
+              }
             }
         });
 
@@ -167,15 +340,49 @@ const DiagnosticMapComponent = () => {
           if (ds.isDrawing && ds.drawingMode && ds.drawingMode !== 'tee' && ds.drawingMode !== 'basket') {
             const { lat, lng } = e.latlng;
             const finalPath = [...ds.tempPath, { lat, lng }];
-            // Validation des longueurs minimales
-            if ((ds.drawingMode === 'mandatory-line' && finalPath.length < 2) ||
-                ((ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') && finalPath.length < 3)) {
-              drawingDispatch({ type: 'CANCEL_DRAWING' });
-              return;
-            }
             const L2 = await import('leaflet');
-            createPathElement(ds.drawingMode, finalPath, L2);
-            drawingDispatch({ type: 'FINISH_DRAWING' });
+            if (ds.drawingMode === 'mandatory') {
+              // Pose d'un marker mandatory comme une corbeille, mais flèche rouge épaisse
+              const element: CourseElement = {
+                id: generateElementId(),
+                type: 'mandatory',
+                holeNumber: ds.currentHole,
+                position: { lat, lng },
+                properties: {
+                  name: `mandatory ${ds.currentHole}`,
+                  color: getElementColor('mandatory'),
+                  strokeWidth: 6,
+                  fillOpacity: 1,
+                  angle: 0
+                } as import('../types/course-elements').ElementProperties
+              };
+              const color = 'red';
+              const angle = 0;
+              const icon = L2.divIcon({
+                html: `<div style="transform:rotate(${angle}deg);width:40px;height:40px;display:flex;align-items:center;justify-content:center;"><svg width='40' height='40' viewBox='0 0 40 40'><polygon points='10,20 36,20 28,10 28,15 10,15 10,25 28,25 28,30' fill='${color}' stroke='#333' stroke-width='4'/></svg></div>`,
+                className: '', iconSize:[40,40], iconAnchor:[20,20]
+              });
+              const marker = L2.marker([lat, lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
+              marker.on('dragend', () => {
+                const ll = marker.getLatLng();
+                drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: element.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
+              });
+              marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id }); });
+              marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: element.id }); });
+              element.leafletLayer = marker;
+              elementLayersRef.current[element.id] = marker;
+              drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
+            } else if (ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
+              // Validation des longueurs minimales
+              if (finalPath.length < 3) {
+                drawingDispatch({ type: 'CANCEL_DRAWING' });
+                return;
+              }
+              createPathElement(ds.drawingMode, finalPath, L2);
+            }
+            if (ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
+              drawingDispatch({ type: 'FINISH_DRAWING' });
+            }
           }
         });
       } catch (err) {
@@ -310,13 +517,14 @@ const DiagnosticMapComponent = () => {
       }
     });
 
-    element.leafletLayer = marker;
+    element.leafletLayer = marker; // vestigial (sera perdu dans snapshots) mais laissé pour compat
+    elementLayersRef.current[element.id] = marker;
     drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
   };
 
   // Créer un élément de chemin (zone, ligne)
   const createPathElement = (
-    type: 'ob-zone' | 'hazard' | 'mandatory-line', 
+  type: 'ob-zone' | 'hazard', 
     path: { lat: number; lng: number }[], 
     L: any
   ) => {
@@ -330,8 +538,8 @@ const DiagnosticMapComponent = () => {
       properties: {
         name: `${type} ${drawingState.currentHole}`,
         color: getElementColor(type),
-        strokeWidth: type === 'mandatory-line' ? 4 : 2,
-        fillOpacity: type === 'mandatory-line' ? 0 : 0.3
+  strokeWidth: 2,
+  fillOpacity: 0.3
       }
     };
 
@@ -339,28 +547,20 @@ const DiagnosticMapComponent = () => {
     const latlngs = path.map(p => [p.lat, p.lng]);
 
     let layer;
-    if (type === 'mandatory-line') {
-      // Ligne
-      layer = L.polyline(latlngs, {
-        color: element.properties!.color,
-        weight: element.properties!.strokeWidth,
-        opacity: 0.8
-      }).addTo(mapInstanceRef.current);
-    } else {
-      // Zone (polygon)
-      layer = L.polygon(latlngs, {
-        color: element.properties!.color,
-        weight: element.properties!.strokeWidth,
-        fillOpacity: element.properties!.fillOpacity,
-        fillColor: element.properties!.color
-      }).addTo(mapInstanceRef.current);
-    }
+    // Zone (polygon)
+    layer = L.polygon(latlngs, {
+      color: element.properties!.color,
+      weight: element.properties!.strokeWidth,
+      fillOpacity: element.properties!.fillOpacity,
+      fillColor: element.properties!.color
+    }).addTo(mapInstanceRef.current);
 
     layer.on('click', () => {
       drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id });
     });
 
     element.leafletLayer = layer;
+    elementLayersRef.current[element.id] = layer;
     drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
   };
 
@@ -508,6 +708,22 @@ const DiagnosticMapComponent = () => {
           })()}
         </Box>
       )}
+    {/* Slider de rotation si mandatory sélectionné */}
+    {selectedMandatory && (
+      <Box sx={{ position:'absolute', top:80, left:10, zIndex:1200, background:'#fff', p:2, borderRadius:2, boxShadow:2, minWidth:220 }}>
+        <strong>Rotation de la flèche</strong>
+        <Slider
+          value={angleValue}
+          min={0}
+          max={359}
+          step={1}
+          onChange={(_, v) => {
+            drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: selectedMandatory.id, updates: { properties: { ...selectedMandatory.properties, angle: Number(v) } } } });
+          }}
+          valueLabelDisplay="auto"
+        />
+      </Box>
+    )}
     </Box>
   );
 };
