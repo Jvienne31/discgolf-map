@@ -1,4 +1,5 @@
-import { Box, Button, Divider, Typography, Chip } from '@mui/material';
+import { Box, Button, Divider, Typography, Chip, IconButton, Stack } from '@mui/material';
+import { Add, Remove, ArrowBack, ArrowForward } from '@mui/icons-material';
 import { 
   NearMe, 
   SportsMartialArts, 
@@ -61,6 +62,47 @@ const DrawingToolsSidebar = () => {
   const cancelDrawing = () => {
     dispatch({ type: 'CANCEL_DRAWING' });
   };
+
+  // Gestion des trous
+  const holesSorted = [...state.holes].sort((a,b) => a.number - b.number);
+  const currentIndex = holesSorted.findIndex(h => h.number === state.currentHole);
+  const nextHole = () => {
+    if (currentIndex < holesSorted.length - 1) {
+      dispatch({ type: 'SET_CURRENT_HOLE', payload: holesSorted[currentIndex + 1].number });
+    }
+  };
+  const prevHole = () => {
+    if (currentIndex > 0) {
+      dispatch({ type: 'SET_CURRENT_HOLE', payload: holesSorted[currentIndex - 1].number });
+    }
+  };
+  const addHole = () => {
+    const max = holesSorted.reduce((m,h) => Math.max(m,h.number), 0);
+    const newNumber = max + 1;
+    dispatch({ type: 'ADD_HOLE', payload: newNumber });
+    dispatch({ type: 'SET_CURRENT_HOLE', payload: newNumber });
+  };
+  const removeCurrentHole = () => {
+    if (holesSorted.length <= 1) return;
+    dispatch({ type: 'DELETE_HOLE', payload: state.currentHole });
+  };
+
+  // Distance tee -> panier (simple: premier tee et premier panier du trou)
+  const currentHoleData = state.holes.find(h => h.number === state.currentHole);
+  let teeBasketDistance: number | null = null;
+  if (currentHoleData) {
+    const tee = currentHoleData.elements.find(e => e.type === 'tee' && e.position);
+    const basket = currentHoleData.elements.find(e => e.type === 'basket' && e.position);
+    if (tee && basket && tee.position && basket.position) {
+      const R = 6371000; // m
+      const toRad = (d: number) => d * Math.PI / 180;
+      const dLat = toRad(basket.position.lat - tee.position.lat);
+      const dLng = toRad(basket.position.lng - tee.position.lng);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(tee.position.lat))*Math.cos(toRad(basket.position.lat))*Math.sin(dLng/2)**2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      teeBasketDistance = Math.round(R * c);
+    }
+  }
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -146,6 +188,21 @@ const DrawingToolsSidebar = () => {
         <Typography variant="body2" color="text.secondary">
           • Trou actuel: {state.currentHole}
         </Typography>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ my: 1 }}>
+          <IconButton size="small" onClick={prevHole} disabled={currentIndex <= 0}>
+            <ArrowBack fontSize="inherit" />
+          </IconButton>
+          <Typography variant="caption">{currentIndex + 1} / {holesSorted.length}</Typography>
+          <IconButton size="small" onClick={nextHole} disabled={currentIndex >= holesSorted.length - 1}>
+            <ArrowForward fontSize="inherit" />
+          </IconButton>
+          <IconButton size="small" onClick={addHole} color="primary">
+            <Add fontSize="inherit" />
+          </IconButton>
+          <IconButton size="small" onClick={removeCurrentHole} disabled={holesSorted.length <= 1} color="error">
+            <Remove fontSize="inherit" />
+          </IconButton>
+        </Stack>
         {state.holes[state.currentHole] && (
           <>
             <Typography variant="body2" color="text.secondary">
@@ -157,6 +214,11 @@ const DrawingToolsSidebar = () => {
             <Typography variant="body2" color="text.secondary">
               • Paniers: {state.holes[state.currentHole].elements.filter((e: any) => e.type === 'basket').length}
             </Typography>
+            {teeBasketDistance !== null && (
+              <Typography variant="body2" color="text.secondary">
+                • Distance Tee→Panier: {teeBasketDistance} m
+              </Typography>
+            )}
           </>
         )}
       </Box>

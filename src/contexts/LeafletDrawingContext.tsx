@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 
 // Types pour les éléments du parcours
 export interface CourseElement {
@@ -238,7 +238,32 @@ interface LeafletDrawingProviderProps {
 }
 
 export const LeafletDrawingProvider = ({ children }: LeafletDrawingProviderProps) => {
-  const [state, dispatch] = useReducer(leafletDrawingReducer, initialState);
+  // Charger depuis localStorage si dispo
+  const loadedRef = useRef(false);
+  const initializer = (): LeafletDrawingState => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('dgmap_state_v1') : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // Ne jamais restaurer l'objet map (non sérialisable)
+        parsed.map = null;
+        return parsed as LeafletDrawingState;
+      }
+    } catch {}
+    return initialState;
+  };
+  const [state, dispatch] = useReducer(leafletDrawingReducer, undefined, initializer);
+
+  // Sauvegarde
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+    }
+    try {
+      const toSave = { ...state, map: null };
+      window.localStorage.setItem('dgmap_state_v1', JSON.stringify(toSave));
+    } catch {}
+  }, [state]);
 
   return (
     <LeafletDrawingContext.Provider value={{ state, dispatch }}>

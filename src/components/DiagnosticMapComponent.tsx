@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Box, ButtonGroup, Button } from '@mui/material';
 import { Satellite, Map as MapIcon, Terrain, Layers, HighQuality, Public } from '@mui/icons-material';
 import { useLeafletDrawing, CourseElement, generateElementId, getElementColor } from '../contexts/LeafletDrawingContext';
+import { layerConfigs, layerNames, BaseLayerKey } from '../utils/layers';
+import { debugLog } from '../utils/debug';
 
 const DiagnosticMapComponent = () => {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -9,62 +11,12 @@ const DiagnosticMapComponent = () => {
   const currentLayerRef = useRef<any>(null);
   // Ref pour signaler qu'une initialisation est en cours (éviter course condition StrictMode)
   const initializingRef = useRef(false);
-  const [currentLayer, setCurrentLayer] = useState<'osm' | 'satellite' | 'satellite-hd' | 'satellite-labels' | 'satellite-hybrid' | 'topo'>('osm');
+  const [currentLayer, setCurrentLayer] = useState<BaseLayerKey>('osm');
   
   // Hook pour le contexte de dessin
   const { state: drawingState, dispatch: drawingDispatch } = useLeafletDrawing();
 
-  // Configuration des couches
-  const layerConfigs = {
-    osm: {
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 22,
-      maxNativeZoom: 19
-    },
-    satellite: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
-      maxZoom: 22,
-      maxNativeZoom: 18
-    },
-    'satellite-hd': {
-      url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-      attribution: '&copy; Google',
-      maxZoom: 22,
-      maxNativeZoom: 20,
-      subdomains: '0123'
-    },
-    'satellite-labels': {
-      baseUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      labelsUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
-      maxZoom: 22,
-      maxNativeZoom: 18
-    },
-    'satellite-hybrid': {
-      url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-      attribution: '&copy; Google',
-      maxZoom: 22,
-      maxNativeZoom: 20,
-      subdomains: '0123'
-    },
-    topo: {
-      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-      attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
-      maxZoom: 22,
-      maxNativeZoom: 17
-    }
-  };
-
-  const layerNames = {
-    osm: 'OpenStreetMap',
-    satellite: 'Satellite Esri',
-    'satellite-hd': 'Satellite HD Google',
-    'satellite-labels': 'Satellite + Labels',
-    'satellite-hybrid': 'Google Hybrid',
-    topo: 'Topographique'
-  };
+  // (configs et noms extraits dans utils/layers.ts)
 
   // Ref pour toujours disposer de l'état le plus récent dans les handlers Leaflet
   const drawingStateRef = useRef(drawingState);
@@ -97,14 +49,14 @@ const DiagnosticMapComponent = () => {
 
   updateLayer('osm', L);
   drawingDispatch({ type: 'SET_MAP', payload: map });
-  console.log('🎉 Carte initialisée (unique)');
+  debugLog('🎉 Carte initialisée (unique)');
 
         // Enregistrer les handlers UNE SEULE FOIS et lire l'état via ref
         map.on('click', async (e: any) => {
           const L2 = await import('leaflet'); // lazy au besoin
             const ds = drawingStateRef.current;
             const { lat, lng } = e.latlng;
-            console.log('🖱️ Click map -> mode:', ds.drawingMode);
+            debugLog('🖱️ Click map -> mode:', ds.drawingMode);
             if (ds.drawingMode === 'tee' || ds.drawingMode === 'basket') {
               createPointElement(ds.drawingMode, { lat, lng }, L2);
             } else if (ds.drawingMode && !ds.isDrawing) {
@@ -125,7 +77,7 @@ const DiagnosticMapComponent = () => {
           }
         });
       } catch (err) {
-        console.error('❌ Erreur init carte:', err);
+  debugLog('❌ Erreur init carte:', err);
       } finally {
         // Quel que soit le résultat, libérer le flag pour éviter blocage si erreur
         initializingRef.current = false;
@@ -224,30 +176,32 @@ const DiagnosticMapComponent = () => {
       }
     };
 
-    // Créer le marqueur Leaflet
+    // Icône SVG plus nette
+    const color = getElementColor(type);
+    const glyph = type === 'tee' ? 'T' : 'B';
     const icon = L.divIcon({
-      html: `<div style="
-        background-color: ${getElementColor(type)};
-        color: white;
-        border-radius: 50%;
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        border: 2px solid white;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      ">${type === 'tee' ? '🎯' : '🥏'}</div>`,
+      html: `\n        <div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">\n          <svg viewBox='0 0 40 40' width='30' height='30'>\n            <circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' />\n            <text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text>\n          </svg>\n        </div>` ,
       className: '',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
     });
 
-    const marker = L.marker([position.lat, position.lng], { icon }).addTo(mapInstanceRef.current);
+    const marker = L.marker([position.lat, position.lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
+    marker.on('dragend', () => {
+      const newLatLng = marker.getLatLng();
+      drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: element.id, updates: { position: { lat: newLatLng.lat, lng: newLatLng.lng } } }});
+    });
     
-    marker.on('click', () => {
+    marker.on('click', (ev: any) => {
+      ev.originalEvent?.stopPropagation?.();
       drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id });
+    });
+    marker.on('contextmenu', (ev: any) => {
+      ev.originalEvent?.preventDefault?.();
+      drawingDispatch({ type: 'DELETE_ELEMENT', payload: element.id });
+      if (marker && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(marker);
+      }
     });
 
     element.leafletLayer = marker;
@@ -312,6 +266,7 @@ const DiagnosticMapComponent = () => {
         sx={{
           height: '100%',
           width: '100%',
+          cursor: drawingState.drawingMode ? (drawingState.drawingMode === 'tee' || drawingState.drawingMode === 'basket' ? 'crosshair' : 'cell') : 'grab',
           '& .leaflet-container': {
             height: '100%',
             width: '100%',
@@ -323,7 +278,7 @@ const DiagnosticMapComponent = () => {
           }
         }}
       />
-
+      
       {/* Sélecteur de couches - responsive */}
       <Box
         sx={{
