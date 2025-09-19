@@ -81,6 +81,43 @@ const DiagnosticMapComponent = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawingDispatch]);
 
+  // Effet: mise à jour style/icône des éléments existants quand leurs propriétés changent
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    // Parcourir tous les éléments
+    drawingState.holes.forEach(hole => {
+      hole.elements.forEach(el => {
+        if (!el.leafletLayer) return;
+        const color = el.properties?.color || getElementColor(el.type);
+        // Point: recréer l'icône si couleur ou name change
+        if (el.type === 'tee' || el.type === 'basket') {
+          if (el.leafletLayer.setIcon) {
+            const glyph = el.type === 'tee' ? 'T' : 'B';
+            const L = (window as any).L; // si global disponible, sinon ignorer
+            if (L) {
+              const icon = L.divIcon({
+                html: `\n                  <div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">\n                    <svg viewBox='0 0 40 40' width='30' height='30'>\n                      <circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' />\n                      <text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text>\n                    </svg>\n                  </div>` ,
+                className: '',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+              });
+              try { el.leafletLayer.setIcon(icon); } catch {}
+            }
+          }
+        } else {
+          // Ligne / zone: appliquer style
+            if (el.leafletLayer.setStyle) {
+              const style: any = { color };
+              if (el.type !== 'mandatory-line') {
+                style.fillColor = color;
+              }
+              try { el.leafletLayer.setStyle(style); } catch {}
+            }
+        }
+      });
+    });
+  }, [drawingState.holes]);
+
   useEffect(() => {
     const initMap = async () => {
       try {
