@@ -1,30 +1,22 @@
-import React from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
   Button,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   Accordion,
   AccordionSummary,
   AccordionDetails,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  GolfCourse as BasketIcon,
-  RadioButtonUnchecked as TeeIcon,
-  Warning as HazardIcon,
-  Block as OBIcon,
-  Navigation as MandoIcon,
   Save as SaveIcon,
   FileDownload as ExportIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
+import DrawingToolsSidebar from './DrawingToolsSidebar';
 
-const Sidebar: React.FC = () => {
+const Sidebar = () => {
   return (
     <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
       {/* Guide zoom */}
@@ -48,46 +40,7 @@ const Sidebar: React.FC = () => {
       <Divider sx={{ my: 2 }} />
 
       {/* Outils de création */}
-      <Typography variant="h6" gutterBottom>
-        Outils de Création
-      </Typography>
-      
-      <List dense>
-        <ListItem button>
-          <ListItemIcon>
-            <TeeIcon color="primary" />
-          </ListItemIcon>
-          <ListItemText primary="Placer un Tee" />
-        </ListItem>
-        
-        <ListItem button>
-          <ListItemIcon>
-            <BasketIcon color="secondary" />
-          </ListItemIcon>
-          <ListItemText primary="Placer un Panier" />
-        </ListItem>
-        
-        <ListItem button>
-          <ListItemIcon>
-            <OBIcon color="error" />
-          </ListItemIcon>
-          <ListItemText primary="Zone OB" />
-        </ListItem>
-        
-        <ListItem button>
-          <ListItemIcon>
-            <HazardIcon color="warning" />
-          </ListItemIcon>
-          <ListItemText primary="Zone Hazard" />
-        </ListItem>
-        
-        <ListItem button>
-          <ListItemIcon>
-            <MandoIcon />
-          </ListItemIcon>
-          <ListItemText primary="Mandatory" />
-        </ListItem>
-      </List>
+      <DrawingToolsSidebar />
 
       <Divider sx={{ my: 2 }} />
 

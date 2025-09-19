@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 
 export type MapLayer = 'osm' | 'satellite' | 'satellite-labels' | 'topo';
 
@@ -23,7 +23,7 @@ interface MapProviderProps {
   children: ReactNode;
 }
 
-export const MapProvider: React.FC<MapProviderProps> = ({ children }) => {
+export const MapProvider = ({ children }: MapProviderProps) => {
   const [currentLayer, setCurrentLayer] = useState<MapLayer>('osm');
   const [zoom, setZoom] = useState(13);
 

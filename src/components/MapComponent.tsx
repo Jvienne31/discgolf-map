@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { MapContainer } from 'react-leaflet';
 import { Box, ButtonGroup, Button } from '@mui/material';
 import { Satellite, Map as MapIcon, Terrain, Layers, HighQuality, Public } from '@mui/icons-material';
 import 'leaflet/dist/leaflet.css';
 import '../styles/leaflet-tiles.css';
+import '../styles/drawing-tools.css';
 import '../utils/leaflet-config';
 import { LayerSelector } from './LayerSelector';
 import { initializeTileEnhancements } from '../utils/tile-enhancements';
 
 type LayerType = 'osm' | 'satellite' | 'satellite-hd' | 'satellite-labels' | 'satellite-hybrid' | 'topo';
 
-const MapComponent: React.FC = () => {
+const MapComponent = () => {
   const position: [number, number] = [46.2276, 2.2137]; // Centre de la France par défaut
   const [currentLayer, setCurrentLayer] = useState<LayerType>('osm');
 

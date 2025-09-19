@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { useMap } from 'react-leaflet';
 import * as L from 'leaflet';
 
@@ -6,7 +6,7 @@ interface LayerSelectorProps {
   selectedLayer: string;
 }
 
-export const LayerSelector: React.FC<LayerSelectorProps> = ({ selectedLayer }) => {
+export const LayerSelector = ({ selectedLayer }: LayerSelectorProps) => {
   const map = useMap();
   const currentLayersRef = useRef<L.TileLayer[]>([]);
 

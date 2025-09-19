@@ -1,0 +1,112 @@
+/* Styles pour la barre d'outils de dessin */
+.drawing-toolbar {
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Styles pour les éléments de cours sur la carte */
+.course-element {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.course-element:hover {
+  transform: scale(1.1);
+  z-index: 1000;
+}
+
+.course-element.selected {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Styles pour les marqueurs personnalisés */
+.custom-tee-icon {
+  animation: bounceIn 0.3s ease-out;
+}
+
+.custom-basket-icon {
+  animation: bounceIn 0.3s ease-out;
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Styles pour les zones OB */
+.ob-zone {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Styles pour les lignes de mesure */
+.measurement-line {
+  stroke-dasharray: 5, 5;
+  animation: dash 1s linear infinite;
+}
+
+@keyframes dash {
+  to { stroke-dashoffset: -10; }
+}
+
+/* Styles pour améliorer la visibilité des outils */
+.drawing-mode-active {
+  cursor: crosshair !important;
+}
+
+.drawing-mode-active * {
+  cursor: crosshair !important;
+}
+
+/* Styles pour les tooltips de distance */
+.distance-tooltip {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+/* Amélioration des contrôles Leaflet */
+.leaflet-control-container .leaflet-control {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Style pour le mode dessin actif */
+.leaflet-container.drawing-active {
+  cursor: crosshair;
+}
+
+/* Amélioration du popup des éléments */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.leaflet-popup-content {
+  margin: 12px 16px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.leaflet-popup-tip {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
