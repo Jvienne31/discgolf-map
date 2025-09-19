@@ -203,23 +203,22 @@ const DrawingToolsSidebar = () => {
             <Remove fontSize="inherit" />
           </IconButton>
         </Stack>
-        {state.holes[state.currentHole] && (
-          <>
-            <Typography variant="body2" color="text.secondary">
-              • Éléments: {state.holes[state.currentHole].elements.length}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              • Tees: {state.holes[state.currentHole].elements.filter((e: any) => e.type === 'tee').length}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              • Paniers: {state.holes[state.currentHole].elements.filter((e: any) => e.type === 'basket').length}
-            </Typography>
-            {teeBasketDistance !== null && (
-              <Typography variant="body2" color="text.secondary">
-                • Distance Tee→Panier: {teeBasketDistance} m
-              </Typography>
-            )}
-          </>
+        {currentHoleData && (
+          (() => {
+            const elems = currentHoleData.elements;
+            const tees = elems.filter(e => e.type === 'tee');
+            const baskets = elems.filter(e => e.type === 'basket');
+            return (
+              <>
+                <Typography variant="body2" color="text.secondary">• Éléments: {elems.length}</Typography>
+                <Typography variant="body2" color="text.secondary">• Tees: {tees.length}</Typography>
+                <Typography variant="body2" color="text.secondary">• Paniers: {baskets.length}</Typography>
+                {tees.length > 0 && baskets.length > 0 && teeBasketDistance !== null && (
+                  <Typography variant="body2" color="text.secondary">• Distance Tee→Panier: {teeBasketDistance} m</Typography>
+                )}
+              </>
+            );
+          })()
         )}
       </Box>
 
