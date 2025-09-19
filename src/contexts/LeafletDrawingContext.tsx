@@ -27,7 +27,7 @@ export interface CourseHole {
 export interface LeafletDrawingState {
   holes: CourseHole[];
   currentHole: number;
-  drawingMode: CourseElement['type'] | null;
+  drawingMode: (CourseElement['type'] | 'measure') | null;
   selectedElement: string | null;
   isDrawing: boolean;
   tempPath: { lat: number; lng: number }[];
@@ -37,7 +37,7 @@ export interface LeafletDrawingState {
 // Actions
 export type LeafletDrawingAction =
   | { type: 'SET_MAP'; payload: any }
-  | { type: 'SET_DRAWING_MODE'; payload: CourseElement['type'] | null }
+  | { type: 'SET_DRAWING_MODE'; payload: (CourseElement['type'] | 'measure') | null }
   | { type: 'SET_CURRENT_HOLE'; payload: number }
   | { type: 'ADD_ELEMENT'; payload: CourseElement }
   | { type: 'UPDATE_ELEMENT'; payload: { id: string; updates: Partial<CourseElement> } }
@@ -48,7 +48,8 @@ export type LeafletDrawingAction =
   | { type: 'FINISH_DRAWING' }
   | { type: 'CANCEL_DRAWING' }
   | { type: 'ADD_HOLE'; payload: number }
-  | { type: 'DELETE_HOLE'; payload: number };
+  | { type: 'DELETE_HOLE'; payload: number }
+  | { type: 'UPDATE_HOLE'; payload: { number: number; updates: Partial<CourseHole> } };
 
 // État initial
 const initialState: LeafletDrawingState = {
@@ -221,6 +222,14 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         tempPath: []
       };
 
+    case 'UPDATE_HOLE': {
+      const idx = state.holes.findIndex(h => h.number === action.payload.number);
+      if (idx === -1) return state;
+      const holes = [...state.holes];
+      holes[idx] = { ...holes[idx], ...action.payload.updates };
+      return { ...state, holes };
+    }
+
     default:
       return state;
   }
@@ -286,7 +295,7 @@ export const generateElementId = () => {
   return `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
 
-export const getElementColor = (type: CourseElement['type']): string => {
+export const getElementColor = (type: CourseElement['type'] | 'measure'): string => {
   switch (type) {
     case 'tee':
       return '#2196f3'; // Bleu
@@ -298,6 +307,8 @@ export const getElementColor = (type: CourseElement['type']): string => {
       return '#ff5722'; // Rouge-orange
     case 'mandatory-line':
       return '#9c27b0'; // Violet
+    case 'measure':
+      return '#607d8b'; // Gris bleuté
     default:
       return '#000000';
   }

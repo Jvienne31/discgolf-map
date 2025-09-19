@@ -1,4 +1,4 @@
-import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField } from '@mui/material';
 import { useState } from 'react';
 import { Add, Remove, ArrowBack, ArrowForward } from '@mui/icons-material';
 import { 
@@ -8,7 +8,8 @@ import {
   Warning, 
   TrendingFlat,
   Clear,
-  TouchApp
+  TouchApp,
+  Straighten
 } from '@mui/icons-material';
 import { useLeafletDrawing, CourseElement } from '../contexts/LeafletDrawingContext';
 
@@ -16,8 +17,10 @@ const DrawingToolsSidebar = () => {
   const { state, dispatch } = useLeafletDrawing();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDeleteHole, setPendingDeleteHole] = useState<number | null>(null);
+  const [importDialog, setImportDialog] = useState(false);
+  const [importText, setImportText] = useState('');
 
-  const handleToolSelect = (tool: CourseElement['type'] | null) => {
+  const handleToolSelect = (tool: CourseElement['type'] | 'measure' | null) => {
     console.log('🛠️ Outil sélectionné:', tool);
     dispatch({ type: 'SET_DRAWING_MODE', payload: tool });
     console.log('📊 Nouvel état après dispatch:', { tool });
@@ -29,6 +32,12 @@ const DrawingToolsSidebar = () => {
       label: 'Sélectionner',
       icon: <TouchApp />,
       description: 'Mode sélection'
+    },
+    {
+      type: 'measure' as any,
+      label: 'Mesurer',
+      icon: <Straighten />,
+      description: 'Mesurer une distance (multi segments)'
     },
     {
       type: 'tee' as const,
@@ -161,6 +170,71 @@ const DrawingToolsSidebar = () => {
           )}
         </Box>
       )}
+      {/* Edition élément sélectionné */}
+      {state.selectedElement && (() => {
+        const hole = state.holes.find(h => h.elements.some(e => e.id === state.selectedElement));
+        const el = hole?.elements.find(e => e.id === state.selectedElement);
+        if (!el) return null;
+        return (
+          <Box sx={{ mt: 2, p:1, border: '1px solid #ddd', borderRadius:1 }}>
+            <Typography variant="subtitle2" gutterBottom>✏️ Éditer l'élément</Typography>
+            <TextField
+              size="small"
+              fullWidth
+              label="Nom"
+              value={el.properties?.name || ''}
+              onChange={(e) => dispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { properties: { ...el.properties, name: e.target.value } } } })}
+              sx={{ mb: 1 }}
+            />
+            <TextField
+              size="small"
+              fullWidth
+              label="Couleur"
+              type="color"
+              value={el.properties?.color || '#000000'}
+              onChange={(e) => dispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { properties: { ...el.properties, color: e.target.value } } } })}
+              sx={{ mb: 1 }}
+            />
+            <Button size="small" color="error" onClick={() => dispatch({ type: 'DELETE_ELEMENT', payload: el.id })}>Supprimer</Button>
+          </Box>
+        );
+      })()}
+
+      {/* Par du trou */}
+      <Box sx={{ mt: 2 }}>
+        <TextField
+          label="Par du trou"
+          size="small"
+          type="number"
+          value={currentHoleData?.par || 3}
+          onChange={(e) => dispatch({ type: 'UPDATE_HOLE', payload: { number: state.currentHole, updates: { par: parseInt(e.target.value || '3', 10) } } })}
+          sx={{ width: 140 }}
+          inputProps={{ min: 1, max: 10 }}
+        />
+      </Box>
+
+      {/* Export / Import */}
+      <Divider sx={{ my:2 }} />
+      <Typography variant="subtitle2" gutterBottom>💾 Export / Import</Typography>
+      <Stack direction="row" spacing={1} flexWrap="wrap">
+        <Button size="small" variant="outlined" onClick={() => {
+          try {
+            const data = { ...state, map: null };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'parcours.json'; a.click();
+            URL.revokeObjectURL(url);
+          } catch {}
+        }}>Exporter</Button>
+        <Button size="small" variant="outlined" onClick={() => setImportDialog(true)}>Importer</Button>
+        <Button size="small" variant="outlined" color="warning" onClick={() => {
+          if (confirm('Réinitialiser le parcours ?')) {
+            localStorage.removeItem('dgmap_state_v1');
+            location.reload();
+          }
+        }}>Reset</Button>
+      </Stack>
 
       {/* Outils principaux */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -271,14 +345,47 @@ const DrawingToolsSidebar = () => {
       {state.drawingMode && (
         <Box sx={{ mt: 2, p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
           <Typography variant="caption" color="text.secondary">
-            {state.drawingMode === 'tee' || state.drawingMode === 'basket' 
-              ? '💡 Cliquez sur la carte pour placer'
-              : '💡 Cliquez pour commencer, double-cliquez pour finir'
-            }
+            {state.drawingMode === 'tee' && '🎯 Tee: un seul clic pour placer.'}
+            {state.drawingMode === 'basket' && '🥏 Panier: un seul clic pour placer.'}
+            {state.drawingMode === 'mandatory-line' && '➡️ Mandatory: clic initial puis double‑clic pour terminer (min 2 points).'}
+            {state.drawingMode === 'ob-zone' && '❌ Zone OB: cliquez pour ajouter des sommets, double‑clic pour fermer (min 3 points).'}
+            {state.drawingMode === 'hazard' && '⚠️ Danger: cliquez pour ajouter des sommets, double‑clic pour fermer (min 3 points).'}
+            {state.drawingMode === 'measure' && '📏 Mesure: cliquez pour ajouter des points, double‑clic pour terminer. Aucune sauvegarde.'}
+            <br />Appuyez sur Échap pour annuler.
           </Typography>
         </Box>
       )}
     </Box>
+    {/* Import dialog */}
+    <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>
+      <DialogTitle>Importer un parcours</DialogTitle>
+      <DialogContent>
+        <DialogContentText>Collez un JSON exporté précédemment.</DialogContentText>
+        <TextField
+          multiline
+          minRows={6}
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            fullWidth
+            sx={{ mt:1 }}
+            placeholder='{"holes": ...}'
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setImportDialog(false)}>Annuler</Button>
+        <Button onClick={() => {
+          try {
+            const parsed = JSON.parse(importText);
+            const cleaned = { ...parsed, map: null };
+            localStorage.setItem('dgmap_state_v1', JSON.stringify(cleaned));
+            setImportDialog(false);
+            location.reload();
+          } catch {
+            alert('JSON invalide');
+          }
+        }} variant="contained">Importer</Button>
+      </DialogActions>
+    </Dialog>
     <Dialog open={confirmOpen} onClose={cancelDelete} maxWidth="xs" fullWidth>
       <DialogTitle>Supprimer le trou {pendingDeleteHole}</DialogTitle>
       <DialogContent>

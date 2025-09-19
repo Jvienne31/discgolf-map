@@ -22,6 +22,65 @@ const DiagnosticMapComponent = () => {
   const drawingStateRef = useRef(drawingState);
   useEffect(() => { drawingStateRef.current = drawingState; }, [drawingState]);
 
+  // Prévisualisation temporaire des formes en cours de dessin
+  const tempShapeRef = useRef<any>(null);
+
+  // Effet: mise à jour / création / suppression de la forme temporaire selon l'état de dessin
+  useEffect(() => {
+    const run = async () => {
+      if (!mapInstanceRef.current) return;
+      // Ne pas afficher pour les points
+      if (!drawingState.drawingMode || drawingState.drawingMode === 'tee' || drawingState.drawingMode === 'basket') {
+        if (tempShapeRef.current) {
+          mapInstanceRef.current.removeLayer(tempShapeRef.current);
+          tempShapeRef.current = null;
+        }
+        return;
+      }
+      if (!drawingState.isDrawing) {
+        if (tempShapeRef.current) {
+          mapInstanceRef.current.removeLayer(tempShapeRef.current);
+          tempShapeRef.current = null;
+        }
+        return;
+      }
+      const L = await import('leaflet');
+  const pts: [number, number][] = drawingState.tempPath.map(p => [p.lat, p.lng] as [number, number]);
+      if (pts.length === 0) return;
+      const color = getElementColor(drawingState.drawingMode);
+      // Choix: polyline pour preview; si >=3 points et type zone on peut afficher polygon
+      const isZone = drawingState.drawingMode === 'ob-zone' || drawingState.drawingMode === 'hazard';
+      const canPolygon = isZone && pts.length >= 3;
+      if (!tempShapeRef.current) {
+        tempShapeRef.current = canPolygon
+          ? L.polygon(pts, { color, weight: 2, fillOpacity: 0.15, fillColor: color, dashArray: '6 4' })
+          : L.polyline(pts, { color, weight: 2, opacity: 0.8, dashArray: '6 4' });
+        tempShapeRef.current.addTo(mapInstanceRef.current);
+      } else {
+        // Si on doit convertir polyline->polygon
+        if (canPolygon && !(tempShapeRef.current instanceof (await import('leaflet')).Polygon)) {
+          mapInstanceRef.current.removeLayer(tempShapeRef.current);
+          tempShapeRef.current = L.polygon(pts, { color, weight: 2, fillOpacity: 0.15, fillColor: color, dashArray: '6 4' });
+          tempShapeRef.current.addTo(mapInstanceRef.current);
+        } else {
+          tempShapeRef.current.setLatLngs(pts);
+        }
+      }
+    };
+    run();
+  }, [drawingState.drawingMode, drawingState.isDrawing, drawingState.tempPath]);
+
+  // Effet: ESC pour annuler
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        drawingDispatch({ type: 'CANCEL_DRAWING' });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawingDispatch]);
+
   useEffect(() => {
     const initMap = async () => {
       try {
@@ -71,6 +130,12 @@ const DiagnosticMapComponent = () => {
           if (ds.isDrawing && ds.drawingMode && ds.drawingMode !== 'tee' && ds.drawingMode !== 'basket') {
             const { lat, lng } = e.latlng;
             const finalPath = [...ds.tempPath, { lat, lng }];
+            // Validation des longueurs minimales
+            if ((ds.drawingMode === 'mandatory-line' && finalPath.length < 2) ||
+                ((ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') && finalPath.length < 3)) {
+              drawingDispatch({ type: 'CANCEL_DRAWING' });
+              return;
+            }
             const L2 = await import('leaflet');
             createPathElement(ds.drawingMode, finalPath, L2);
             drawingDispatch({ type: 'FINISH_DRAWING' });
@@ -88,6 +153,10 @@ const DiagnosticMapComponent = () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+      }
+      if (tempShapeRef.current && mapInstanceRef.current) {
+        try { mapInstanceRef.current.removeLayer(tempShapeRef.current); } catch {}
+        tempShapeRef.current = null;
       }
     };
   }, []);
@@ -374,6 +443,34 @@ const DiagnosticMapComponent = () => {
         <br />
         🎯 <strong>Prêt pour:</strong> Intégration des outils de dessin
       </Box>
+      {drawingState.drawingMode === 'measure' && drawingState.tempPath.length > 1 && (
+        <Box sx={{
+          position:'absolute',
+          top: 10,
+          left: 10,
+          background:'rgba(0,0,0,0.6)',
+          color:'#fff',
+          padding:'4px 8px',
+          fontSize:'0.75rem',
+          borderRadius:4,
+          zIndex:1200
+        }}>
+          {(() => {
+            const pts = drawingState.tempPath;
+            const R = 6371000;
+            const toRad = (d:number)=> d*Math.PI/180;
+            let dist = 0;
+            for (let i=1;i<pts.length;i++) {
+              const a = pts[i-1]; const b = pts[i];
+              const dLat = toRad(b.lat - a.lat); const dLng = toRad(b.lng - a.lng);
+              const A = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+              const c = 2 * Math.atan2(Math.sqrt(A), Math.sqrt(1-A));
+              dist += R * c;
+            }
+            return `📏 ${dist < 1000 ? dist.toFixed(1)+' m' : (dist/1000).toFixed(2)+' km'}`;
+          })()}
+        </Box>
+      )}
     </Box>
   );
 };
