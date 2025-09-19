@@ -1,4 +1,5 @@
-import { Box, Button, Divider, Typography, Chip, IconButton, Stack } from '@mui/material';
+import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { useState } from 'react';
 import { Add, Remove, ArrowBack, ArrowForward } from '@mui/icons-material';
 import { 
   NearMe, 
@@ -13,6 +14,8 @@ import { useLeafletDrawing, CourseElement } from '../contexts/LeafletDrawingCont
 
 const DrawingToolsSidebar = () => {
   const { state, dispatch } = useLeafletDrawing();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingDeleteHole, setPendingDeleteHole] = useState<number | null>(null);
 
   const handleToolSelect = (tool: CourseElement['type'] | null) => {
     console.log('🛠️ Outil sélectionné:', tool);
@@ -84,7 +87,25 @@ const DrawingToolsSidebar = () => {
   };
   const removeCurrentHole = () => {
     if (holesSorted.length <= 1) return;
+    const hole = currentHoleData;
+    if (hole && hole.elements.length > 0) {
+      setPendingDeleteHole(hole.number);
+      setConfirmOpen(true);
+      return;
+    }
     dispatch({ type: 'DELETE_HOLE', payload: state.currentHole });
+  };
+
+  const confirmDelete = () => {
+    if (pendingDeleteHole !== null) {
+      dispatch({ type: 'DELETE_HOLE', payload: pendingDeleteHole });
+    }
+    setConfirmOpen(false);
+    setPendingDeleteHole(null);
+  };
+  const cancelDelete = () => {
+    setConfirmOpen(false);
+    setPendingDeleteHole(null);
   };
 
   // Distance tee -> panier (simple: premier tee et premier panier du trou)
@@ -105,6 +126,7 @@ const DrawingToolsSidebar = () => {
   }
 
   return (
+    <>
     <Box sx={{ width: '100%' }}>
       {/* Titre */}
       <Typography 
@@ -188,20 +210,43 @@ const DrawingToolsSidebar = () => {
         <Typography variant="body2" color="text.secondary">
           • Trou actuel: {state.currentHole}
         </Typography>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ my: 1 }}>
-          <IconButton size="small" onClick={prevHole} disabled={currentIndex <= 0}>
-            <ArrowBack fontSize="inherit" />
-          </IconButton>
-          <Typography variant="caption">{currentIndex + 1} / {holesSorted.length}</Typography>
-          <IconButton size="small" onClick={nextHole} disabled={currentIndex >= holesSorted.length - 1}>
-            <ArrowForward fontSize="inherit" />
-          </IconButton>
-          <IconButton size="small" onClick={addHole} color="primary">
-            <Add fontSize="inherit" />
-          </IconButton>
-          <IconButton size="small" onClick={removeCurrentHole} disabled={holesSorted.length <= 1} color="error">
-            <Remove fontSize="inherit" />
-          </IconButton>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ my: 1, flexWrap:'wrap' }}>
+          <Tooltip title="Trou précédent">
+            <span>
+              <IconButton size="small" onClick={prevHole} disabled={currentIndex <= 0}>
+                <ArrowBack fontSize="inherit" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Select
+            size="small"
+            value={state.currentHole}
+            onChange={(e) => dispatch({ type: 'SET_CURRENT_HOLE', payload: e.target.value as number })}
+            sx={{ minWidth: 80 }}
+          >
+            {holesSorted.map(h => (
+              <MenuItem key={h.number} value={h.number}>Trou {h.number}</MenuItem>
+            ))}
+          </Select>
+          <Tooltip title="Trou suivant">
+            <span>
+              <IconButton size="small" onClick={nextHole} disabled={currentIndex >= holesSorted.length - 1}>
+                <ArrowForward fontSize="inherit" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Ajouter un nouveau trou">
+            <IconButton size="small" onClick={addHole} color="primary">
+              <Add fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+            <Tooltip title={holesSorted.length <= 1 ? 'Impossible (au moins 1 trou requis)' : 'Supprimer ce trou'}>
+              <span>
+                <IconButton size="small" onClick={removeCurrentHole} disabled={holesSorted.length <= 1} color="error">
+                  <Remove fontSize="inherit" />
+                </IconButton>
+              </span>
+            </Tooltip>
         </Stack>
         {currentHoleData && (
           (() => {
@@ -234,6 +279,19 @@ const DrawingToolsSidebar = () => {
         </Box>
       )}
     </Box>
+    <Dialog open={confirmOpen} onClose={cancelDelete} maxWidth="xs" fullWidth>
+      <DialogTitle>Supprimer le trou {pendingDeleteHole}</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Ce trou contient des éléments. Confirmer la suppression ? (Ils seront perdus)
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancelDelete}>Annuler</Button>
+        <Button onClick={confirmDelete} color="error" variant="contained">Supprimer</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 
