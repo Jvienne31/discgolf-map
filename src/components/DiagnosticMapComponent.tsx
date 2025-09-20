@@ -9,6 +9,8 @@ const DiagnosticMapComponent = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const currentLayerRef = useRef<any>(null);
+    // Coordonnées de Toulouse, France
+    const initialCenter = { lat: 43.6045, lng: 1.4442 };
   // Ref pour signaler qu'une initialisation est en cours (éviter course condition StrictMode)
   const initializingRef = useRef(false);
   const [currentLayer, setCurrentLayer] = useState<BaseLayerKey>('osm');
@@ -176,22 +178,21 @@ const DiagnosticMapComponent = () => {
           const color = el.properties?.color || getElementColor(el.type);
           const existing = elementLayersRef.current[el.id];
           if (!existing) {
-            // Mandatory: marker flèche avec rotation
+            // Mandatory: marker downward arrow in red circle (always same SVG)
             if (el.type === 'mandatory') {
               if (!el.position) return;
               const angle = (el.properties as import('../types/course-elements').ElementProperties)?.angle ?? 0;
-              const isSelected = drawingState.selectedElement === el.id;
-              const arrowIcon = L.divIcon({
-                html: `<div style="transform:rotate(${angle}deg);width:32px;height:32px;display:flex;align-items:center;justify-content:center;"><svg width='32' height='32' viewBox='0 0 32 32'><polygon points='8,16 24,16 18,10 18,13 8,13 8,19 18,19 18,22' fill='${isSelected ? '#ff1744' : color}' stroke='${isSelected ? '#d32f2f' : '#333'}' stroke-width='2'/></svg></div>`,
-                className: '', iconSize:[32,32], iconAnchor:[16,16]
+              const mandatoryIcon = L.divIcon({
+                html: `<div style="transform:rotate(${angle}deg);width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg width='30' height='30' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'><circle cx='15' cy='15' r='15' fill='#E53935'/><polygon points='12,12 18,12 18,18 24,18 15,27 6,18 12,18' fill='#fff'/></svg></div>`,
+                className: '', iconSize:[30,30], iconAnchor:[15,15]
               });
-              const marker = L.marker([el.position.lat, el.position.lng], { icon: arrowIcon, draggable: true }).addTo(mapInstanceRef.current);
+              const marker = L.marker([el.position.lat, el.position.lng], { icon: mandatoryIcon, draggable: true }).addTo(mapInstanceRef.current);
               marker.on('dragend', () => {
                 const ll = marker.getLatLng();
                 drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
                 // Forcer le refresh de l'icône après déplacement
                 setTimeout(() => {
-                  if (marker.setIcon) marker.setIcon(arrowIcon);
+                  if (marker.setIcon) marker.setIcon(mandatoryIcon);
                 }, 10);
               });
               marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: el.id }); });
@@ -223,12 +224,11 @@ const DiagnosticMapComponent = () => {
             if (el.type === 'mandatory' && el.position && existing.setLatLng && existing.setIcon) {
               existing.setLatLng([el.position.lat, el.position.lng]);
               const angle = el.properties?.angle ?? 0;
-              const isSelected = drawingState.selectedElement === el.id;
-              const arrowIcon = L.divIcon({
-                html: `<div style="transform:rotate(${angle}deg);width:32px;height:32px;display:flex;align-items:center;justify-content:center;"><svg width='32' height='32' viewBox='0 0 32 32'><polygon points='8,16 24,16 18,10 18,13 8,13 8,19 18,19 18,22' fill='${isSelected ? '#ff1744' : color}' stroke='${isSelected ? '#d32f2f' : '#333'}' stroke-width='2'/></svg></div>`,
-                className: '', iconSize:[32,32], iconAnchor:[16,16]
+              const mandatoryIcon = L.divIcon({
+                html: `<div style="transform:rotate(${angle}deg);width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg width='30' height='30' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'><circle cx='15' cy='15' r='15' fill='#E53935'/><polygon points='12,12 18,12 18,18 24,18 15,27 6,18 12,18' fill='#fff'/></svg></div>`,
+                className: '', iconSize:[30,30], iconAnchor:[15,15]
               });
-              try { existing.setIcon(arrowIcon); } catch {}
+              try { existing.setIcon(mandatoryIcon); } catch {}
             } else if ((el.type === 'tee' || el.type === 'basket') && el.position) {
               if (existing.setLatLng) { existing.setLatLng([el.position.lat, el.position.lng]); }
               if (existing.setIcon) {

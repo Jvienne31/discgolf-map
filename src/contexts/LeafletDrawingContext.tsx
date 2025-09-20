@@ -406,7 +406,7 @@ export const getElementColor = (type: CourseElement['type'] | 'measure'): string
       return '#ff5722'; // Rouge-orange
     // mandatory-line supprimé
     case 'mandatory':
-      return '#009688'; // Cyan foncé pour mandatory
+      return '#E53935'; // Rouge vif pour mandatory (correspond à l'icône)
     case 'measure':
       return '#607d8b'; // Gris bleuté
     default:
