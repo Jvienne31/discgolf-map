@@ -1,7 +1,8 @@
 
 import { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { getElementColor } from '../utils/layers';
-import { CourseElement, CourseHole, SnapshottableState, LeafletDrawingState, LeafletDrawingAction } from './types';
+import { CourseElement, CourseHole, SnapshottableState, LeafletDrawingState, LeafletDrawingAction, Measurement } from './types';
+import * as L from 'leaflet';
 
 // --- INITIAL STATE ---
 
@@ -13,6 +14,7 @@ const initialState: LeafletDrawingState = {
   selectedElement: null,
   isDrawing: false,
   tempPath: [],
+  measurement: null,
   map: null,
   past: [],
   future: [],
@@ -33,18 +35,18 @@ const cloneHoles = (holes: CourseHole[]): CourseHole[] => holes.map(h => ({
 }));
 
 export const serializeState = (state: LeafletDrawingState): Partial<LeafletDrawingState> => {
-  const { map, leafletLayer, ...rest } = state as any;
+  const { map, leafletLayer, measurement, ...rest } = state as any;
   return {
     ...rest,
     name: state.name,
     holes: cloneHoles(state.holes),
-    past: [], // On ne sauvegarde plus l'historique pour alléger
+    past: [], 
     future: [],
   };
 };
 
 const snapshot = (state: LeafletDrawingState): SnapshottableState => {
-  const { past, future, map, ...rest } = state;
+  const { past, future, map, measurement, ...rest } = state;
   return { ...rest, name: state.name, holes: cloneHoles(rest.holes) };
 };
 
@@ -69,11 +71,20 @@ const recomputeHoleDistance = (hole: CourseHole): CourseHole => {
 };
 const recalcAllDistances = (holes: CourseHole[]) => holes.map(recomputeHoleDistance);
 
+const calculateDistance = (points: {lat: number, lng: number}[]): number => {
+    let totalDistance = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+        const p1 = L.latLng(points[i].lat, points[i].lng);
+        const p2 = L.latLng(points[i + 1].lat, points[i + 1].lng);
+        totalDistance += p1.distanceTo(p2);
+    }
+    return Math.round(totalDistance);
+}
+
 // --- REDUCER ---
 
 const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawingAction): LeafletDrawingState => {
   
-  // History is only pushed for actions that are undoable
   const shouldPushHistory = [
     'ADD_ELEMENT', 'UPDATE_ELEMENT', 'DELETE_ELEMENT',
     'ADD_HOLE', 'DELETE_HOLE', 'UPDATE_HOLE',
@@ -87,7 +98,9 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       return { ...state, map: action.payload };
 
     case 'SET_DRAWING_MODE':
-      return { ...state, drawingMode: action.payload, selectedElement: null, isDrawing: false, tempPath: [] };
+      // When changing mode, clear any finished measurement, but keep it if we just switch to 'measure'
+      const measurement = action.payload === 'measure' ? state.measurement : null;
+      return { ...state, drawingMode: action.payload, selectedElement: null, isDrawing: false, tempPath: [], measurement };
 
     case 'SET_CURRENT_HOLE':
       return { ...state, currentHole: action.payload, selectedElement: null, drawingMode: null };
@@ -164,29 +177,43 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       return { ...state, selectedElement: action.payload, drawingMode: null };
 
     case 'START_DRAWING':
-      return { ...state, isDrawing: true, tempPath: [action.payload] };
+        if (state.drawingMode === 'measure') {
+            return { ...state, isDrawing: true, measurement: { points: [action.payload], distance: 0 }};
+        }
+        return { ...state, isDrawing: true, tempPath: [action.payload] };
 
     case 'CONTINUE_DRAWING':
       if (!state.isDrawing) return state;
-      if (['ob-zone', 'hazard'].includes(state.drawingMode || '') && state.tempPath.length > 1) {
+
+      if (state.drawingMode === 'measure' && state.measurement) {
+        const newPoints = [...state.measurement.points, action.payload];
+        return { ...state, measurement: { points: newPoints, distance: calculateDistance(newPoints) }};
+      }
+      
+      if (['ob-zone', 'hazard'].includes(state.drawingMode || '')) {
         const firstPoint = state.tempPath[0];
         const lastPoint = action.payload;
-        if (state.map) {
+        if (state.map && state.tempPath.length > 1) {
             const firstLatLng = state.map.options.crs.project(firstPoint);
             const lastLatLng = state.map.options.crs.project(lastPoint);
             const distance = firstLatLng.distanceTo(lastLatLng);
-            if (distance < 10) { // 10m threshold
+            if (distance < 10) { 
                 return leafletDrawingReducer(state, { type: 'FINISH_DRAWING' });
             }
         }
+        return { ...state, tempPath: [...state.tempPath, action.payload] };
       }
-      return { ...state, tempPath: [...state.tempPath, action.payload] };
+      return state;
 
     case 'FINISH_DRAWING':
-      if (!state.isDrawing || !state.drawingMode || state.tempPath.length < 1) {
-        return { ...state, isDrawing: false, tempPath: [] };
+      if (!state.isDrawing) return { ...state, isDrawing: false, tempPath: [] };
+
+      if (state.drawingMode === 'measure') {
+          // Finalize measurement but keep it on screen, just stop drawing.
+          return { ...state, isDrawing: false, drawingMode: null };
       }
-      if (['ob-zone', 'hazard'].includes(state.drawingMode)) {
+
+      if (state.drawingMode && ['ob-zone', 'hazard'].includes(state.drawingMode)) {
         if (state.tempPath.length < 3) {
             return { ...state, isDrawing: false, tempPath: [], drawingMode: null };
         }
@@ -199,9 +226,13 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         };
         return leafletDrawingReducer(state, newElementAction);
       }
+      
       return { ...state, isDrawing: false, tempPath: [] };
 
     case 'CANCEL_DRAWING':
+      if (state.drawingMode === 'measure') {
+          return { ...state, isDrawing: false, drawingMode: null, measurement: null };
+      }
       return { ...state, isDrawing: false, tempPath: [], drawingMode: null };
 
     case 'LOAD_DATA': {
@@ -220,7 +251,7 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
           name: data.name || 'Parcours sans nom',
           holes: recalcAllDistances(sanitizedHoles),
           currentHole: data.currentHole || 1,
-          past: [], // Do not load history
+          past: [],
           future: [],
           map: state.map,
         };
@@ -274,7 +305,6 @@ export const LeafletDrawingProvider = ({ children, courseId }: ProviderProps) =>
           dispatch({ type: 'LOAD_DATA', payload: parsed });
         } catch (error) {
           console.error(`Impossible de charger le parcours ${courseId}. Les données sont peut-être corrompues.`, error);
-          // **IMPORTANT**: On ne supprime plus les données en cas d'erreur.
         }
       } else {
           dispatch({ type: 'LOAD_DATA', payload: { ...initialState, name: 'Nouveau Parcours' }});

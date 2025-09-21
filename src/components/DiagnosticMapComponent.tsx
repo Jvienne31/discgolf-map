@@ -6,6 +6,7 @@ import { useLeafletDrawing } from '../contexts/LeafletDrawingContext';
 import { CourseElement, CourseHole } from '../contexts/types';
 import { layerConfigs, layerNames, BaseLayerKey, getElementColor, getPathOptions } from '../utils/layers';
 import { debugLog } from '../utils/debug';
+import MeasurementLayer from './MeasurementLayer'; // Import the new component
 
 const DiagnosticMapComponent = () => {
   const [mapReady, setMapReady] = useState(false);
@@ -96,7 +97,21 @@ const DiagnosticMapComponent = () => {
             } else {
               drawingDispatch({ type: 'CONTINUE_DRAWING', payload: { lat, lng } });
             }
+          } else if (ds.drawingMode === 'measure') {
+            if (!ds.isDrawing) {
+              drawingDispatch({ type: 'START_DRAWING', payload: { lat, lng } });
+            } else {
+              drawingDispatch({ type: 'CONTINUE_DRAWING', payload: { lat, lng } });
+            }
           }
+        });
+
+        map.on('dblclick', (e: any) => {
+            const ds = drawingStateRef.current;
+            if (ds.drawingMode === 'measure' || ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
+                L.DomEvent.stopPropagation(e);
+                drawingDispatch({ type: 'FINISH_DRAWING' });
+            }
         });
 
       } catch (err) {
@@ -291,6 +306,8 @@ const DiagnosticMapComponent = () => {
         }}
       />
       
+      {mapReady && <MeasurementLayer />}
+
       <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1000 }}>
         <ButtonGroup orientation="vertical" variant="contained" size="small">
           {Object.keys(layerConfigs).map(key => (

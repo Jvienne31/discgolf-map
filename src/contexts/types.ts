@@ -1,21 +1,16 @@
 
-// --- TYPES ---
+import * as L from 'leaflet';
+
+// --- DATA & STATE STRUCTURES ---
 
 export interface CourseElement {
   id: string;
   type: 'tee' | 'basket' | 'ob-zone' | 'hazard' | 'mandatory';
   holeNumber: number;
-  position?: { lat: number; lng: number };
-  path?: { lat: number; lng: number }[];
-  properties?: {
-    name?: string;
-    description?: string;
-    color?: string;
-    strokeWidth?: number;
-    fillOpacity?: number;
-    angle?: number;
-  };
-  leafletLayer?: any; // Leaflet layer reference, non-serializable
+  position?: L.LatLngLiteral;
+  path?: L.LatLngLiteral[];
+  properties?: { [key: string]: any };
+  leafletLayer?: L.Layer;
 }
 
 export interface CourseHole {
@@ -25,40 +20,45 @@ export interface CourseHole {
   elements: CourseElement[];
 }
 
-// The part of the state that can be snapshotted for undo/redo
-export interface SnapshottableState {
-    name: string;
-    holes: CourseHole[];
-    currentHole: number;
-    drawingMode: CourseElement['type'] | 'measure' | null;
-    selectedElement: string | null;
-    isDrawing: boolean;
-    tempPath: { lat: number; lng: number }[];
+export interface Measurement {
+    points: L.LatLng[];
+    distance: number;
 }
 
-// The full state, including history and non-serializable map object
-export interface LeafletDrawingState extends SnapshottableState {
-    map: any;
-    past: SnapshottableState[];
-    future: SnapshottableState[];
+export interface LeafletDrawingState {
+  name: string;
+  holes: CourseHole[];
+  currentHole: number;
+  drawingMode: CourseElement['type'] | 'measure' | null;
+  selectedElement: string | null;
+  isDrawing: boolean;
+  tempPath: L.LatLngLiteral[];
+  measurement: Measurement | null;
+  map: L.Map | null;
+  past: SnapshottableState[];
+  future: SnapshottableState[];
 }
+
+export type SnapshottableState = Omit<LeafletDrawingState, 'past' | 'future' | 'map' | 'measurement'>;
+
+// --- ACTION TYPES ---
 
 export type LeafletDrawingAction =
-  | { type: 'SET_MAP'; payload: any }
+  | { type: 'SET_MAP'; payload: L.Map }
   | { type: 'SET_DRAWING_MODE'; payload: LeafletDrawingState['drawingMode'] }
   | { type: 'SET_CURRENT_HOLE'; payload: number }
   | { type: 'UPDATE_COURSE_NAME'; payload: string }
-  | { type: 'ADD_ELEMENT'; payload: Omit<CourseElement, 'id' | 'holeNumber' | 'leafletLayer'> }
+  | { type: 'ADD_ELEMENT'; payload: Partial<CourseElement> }
   | { type: 'UPDATE_ELEMENT'; payload: { id: string; updates: Partial<CourseElement> } }
   | { type: 'DELETE_ELEMENT'; payload: string }
-  | { type: 'SELECT_ELEMENT'; payload: string | null }
-  | { type: 'START_DRAWING'; payload: { lat: number; lng: number } }
-  | { type: 'CONTINUE_DRAWING'; payload: { lat: number; lng: number } }
-  | { type: 'FINISH_DRAWING' }
-  | { type: 'CANCEL_DRAWING' }
   | { type: 'ADD_HOLE'; payload: number }
   | { type: 'DELETE_HOLE'; payload: number }
-  | { type: 'UPDATE_HOLE'; payload: { number: number; updates: Partial<CourseHole> } }
-  | { type: 'LOAD_DATA'; payload: Partial<LeafletDrawingState> }
+  | { type: 'UPDATE_HOLE'; payload: { number: number, updates: Partial<CourseHole> } }
+  | { type: 'SELECT_ELEMENT'; payload: string | null }
+  | { type: 'START_DRAWING'; payload: L.LatLngLiteral }
+  | { type: 'CONTINUE_DRAWING'; payload: L.LatLngLiteral }
+  | { type: 'FINISH_DRAWING' }
+  | { type: 'CANCEL_DRAWING' }
+  | { type: 'LOAD_DATA'; payload: Partial<LeafletDrawingState> | null }
   | { type: 'UNDO' }
   | { type: 'REDO' };
