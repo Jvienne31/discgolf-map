@@ -1,8 +1,11 @@
-// Centralisation des configurations de couches Leaflet
-// Sépare la logique de la carte pour simplifier DiagnosticMapComponent
+
+import { CourseElement } from '../contexts/types';
+
+// --- CONFIGURATION DES FONDS DE CARTE (TILE LAYERS) ---
 
 export type BaseLayerKey = 'osm' | 'satellite' | 'satellite-hd' | 'satellite-labels' | 'satellite-hybrid' | 'topo';
 
+// Types pour la configuration des couches
 export interface LayerConfigCommon {
   attribution: string;
   maxZoom: number;
@@ -70,4 +73,54 @@ export const layerNames: Record<BaseLayerKey, string> = {
   'satellite-labels': 'Satellite + Labels',
   'satellite-hybrid': 'Google Hybrid',
   topo: 'Topographique'
+};
+
+
+// --- STYLE DES ÉLÉMENTS DE DESSIN ---
+
+export const COLORS = {
+  tee: '#3388ff',      // Bleu
+  basket: '#ffcc00',   // Jaune
+  mandatory: '#ff4136', // Rouge
+  obZone: '#ff4136',   // Rouge
+  hazard: '#ff851b',    // Orange
+  flightPath: '#00BFFF', // DeepSkyBlue
+  default: '#808080'    // Gris
+};
+
+export const getElementColor = (elementType: CourseElement['type']): string => {
+  switch (elementType) {
+    case 'tee': return COLORS.tee;
+    case 'basket': return COLORS.basket;
+    case 'mandatory': return COLORS.mandatory;
+    case 'ob-zone': return COLORS.obZone;
+    case 'hazard': return COLORS.hazard;
+    default: return COLORS.default;
+  }
+};
+
+export const getPathOptions = (element: CourseElement) => {
+  const color = element.properties?.color || getElementColor(element.type);
+  switch (element.type) {
+    case 'ob-zone':
+      return {
+        color: color,
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.4
+      };
+    case 'hazard':
+      return {
+        color: color,
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.3,
+        dashArray: '5, 5'
+      };
+    default:
+      return {
+        color: color,
+        weight: 3
+      };
+  }
 };
