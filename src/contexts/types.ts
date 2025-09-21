@@ -1,3 +1,4 @@
+
 // --- TYPES ---
 
 export interface CourseElement {
@@ -26,6 +27,7 @@ export interface CourseHole {
 
 // The part of the state that can be snapshotted for undo/redo
 export interface SnapshottableState {
+    name: string;
     holes: CourseHole[];
     currentHole: number;
     drawingMode: CourseElement['type'] | 'measure' | null;
@@ -45,6 +47,7 @@ export type LeafletDrawingAction =
   | { type: 'SET_MAP'; payload: any }
   | { type: 'SET_DRAWING_MODE'; payload: LeafletDrawingState['drawingMode'] }
   | { type: 'SET_CURRENT_HOLE'; payload: number }
+  | { type: 'UPDATE_COURSE_NAME'; payload: string }
   | { type: 'ADD_ELEMENT'; payload: Omit<CourseElement, 'id' | 'holeNumber' | 'leafletLayer'> }
   | { type: 'UPDATE_ELEMENT'; payload: { id: string; updates: Partial<CourseElement> } }
   | { type: 'DELETE_ELEMENT'; payload: string }
