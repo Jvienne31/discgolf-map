@@ -1,6 +1,7 @@
 
 import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment, Snackbar } from '@mui/material';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import React from 'react';
 import { Add, Remove, Undo, Redo, Download, Save } from '@mui/icons-material';
 import { 
   NearMe, 
@@ -20,15 +21,13 @@ const DrawingToolsSidebar = () => {
   const [isDirty, setIsDirty] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
-  // Track unsaved changes. Any action that creates a history entry makes the state dirty.
   useEffect(() => {
     setIsDirty(true);
   }, [state.past]);
 
-  // Reset dirty state after loading a course, as it's clean initially.
   useEffect(() => {
     setIsDirty(false);
-  }, [state.name, state.holes.length]); // A reasonable proxy for new course load
+  }, [state.name, state.holes.length]);
 
   const handleSave = useCallback(() => {
     saveCourse();
@@ -113,12 +112,30 @@ const DrawingToolsSidebar = () => {
         console.error("Erreur lors de l'exportation", e);
     }
   };
+
+  const holeElementSummary = useMemo(() => {
+    if (!currentHoleData) return null;
+    return currentHoleData.elements.reduce((acc, el) => {
+      acc[el.type] = (acc[el.type] || 0) + 1;
+      return acc;
+    }, {} as Record<CourseElement['type'], number>);
+  }, [currentHoleData]);
+
+  const elementLabels: Record<CourseElement['type'], string> = {
+    tee: 'Tees',
+    basket: 'Paniers',
+    'ob-zone': 'Zones OB',
+    hazard: 'Dangers',
+    mandatory: 'Mandatories',
+  };
   
   return (
     <>
-    <Box sx={{ width: '100%', p: 2 }}>
+    <Box sx={{ width: '100%', p: 2, overflowY: 'auto', height: 'calc(100vh - 64px)' }}>
         {/* Course Name */}
         <TextField
+            id="course-name-input"
+            name="course-name"
             label="Nom du parcours"
             value={state.name}
             onChange={(e) => dispatch({ type: 'UPDATE_COURSE_NAME', payload: e.target.value })}
@@ -143,6 +160,8 @@ const DrawingToolsSidebar = () => {
         )}
       </Stack>
       <Select
+        id="hole-selector"
+        name="hole-selector"
         size="small"
         value={state.currentHole}
         onChange={(e) => dispatch({ type: 'SET_CURRENT_HOLE', payload: e.target.value as number })}
@@ -155,7 +174,9 @@ const DrawingToolsSidebar = () => {
       </Select>
       {currentHoleData && (
         <TextField
-          size="small"
+            id={`hole-${currentHoleData.number}-par-input`}
+            name={`hole-${currentHoleData.number}-par`}
+            size="small"
             label="Par"
             type="number"
             value={currentHoleData.par}
@@ -205,11 +226,24 @@ const DrawingToolsSidebar = () => {
         return (
           <Box sx={{ mt: 2, p:1, border: '1px solid #ddd', borderRadius:1 }}>
             <Typography variant="subtitle2" gutterBottom>✏️ Éditer l'élément</Typography>
-            <TextField size="small" fullWidth label="Nom" value={el.properties?.name || ''}
+            <TextField 
+              id={`element-${el.id}-name-input`}
+              name={`element-${el.id}-name`}
+              size="small" 
+              fullWidth 
+              label="Nom" 
+              value={el.properties?.name || ''}
               onChange={(e) => dispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { properties: { ...el.properties, name: e.target.value } } } })}
               sx={{ mb: 1 }}
             />
-            <TextField size="small" fullWidth label="Couleur" type="color" value={el.properties?.color || '#000000'}
+            <TextField 
+              id={`element-${el.id}-color-input`}
+              name={`element-${el.id}-color`}
+              size="small" 
+              fullWidth 
+              label="Couleur" 
+              type="color" 
+              value={el.properties?.color || '#000000'}
               onChange={(e) => dispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { properties: { ...el.properties, color: e.target.value } } } })}
               sx={{ mb: 1 }}
             />
@@ -220,10 +254,16 @@ const DrawingToolsSidebar = () => {
 
       {/* Hole Stats */}
       {currentHoleData && (
-        <Box sx={{ mt:2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight:'bold', mb:1 }}>Statistiques du trou</Typography>
-          <Box sx={{ fontSize:'0.75rem' }}>
-            <div>Distance: {currentHoleData.distance !== undefined ? `${currentHoleData.distance} m` : '—'}</div>
+        <Box sx={{ mt:2, p:1.5, background:'#f9f9f9', borderRadius:1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight:'bold', mb:1 }}>Statistiques du Trou</Typography>
+          <Box sx={{ fontSize:'0.8rem', display:'grid', gridTemplateColumns: '1fr 1fr', gap: '0 8px' }}>
+            <div><strong>Distance:</strong></div><div>{currentHoleData.distance !== undefined ? `${currentHoleData.distance} m` : '—'}</div>
+            {holeElementSummary && Object.entries(holeElementSummary).map(([type, count]) => (
+                <React.Fragment key={type}>
+                    <div><strong>{elementLabels[type as CourseElement['type']] || type}:</strong></div>
+                    <div>{count}</div>
+                </React.Fragment>
+            ))}
           </Box>
         </Box>
       )}
