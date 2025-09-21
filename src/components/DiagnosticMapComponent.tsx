@@ -1,18 +1,59 @@
+import { layerConfigs } from '../utils/layers';
 import { useEffect, useRef, useState } from 'react';
 import { Box, ButtonGroup, Button, Slider } from '@mui/material';
 import { Satellite, Map as MapIcon, Terrain, Layers, HighQuality, Public } from '@mui/icons-material';
-import { useLeafletDrawing, CourseElement, CourseHole, generateElementId, getElementColor } from '../contexts/LeafletDrawingContext';
-import { layerConfigs, layerNames, BaseLayerKey } from '../utils/layers';
+import { useLeafletDrawing, CourseElement, CourseHole, getElementColor } from '../contexts/LeafletDrawingContext';
+import { layerNames } from '../utils/layers';
+import { BaseLayerKey } from '../utils/layers';
 import { debugLog } from '../utils/debug';
 
 const DiagnosticMapComponent = () => {
+  // Fonction pour changer de couche (doit être dans le composant)
+  const updateLayer = async (layerType: BaseLayerKey) => {
+    if (!mapInstanceRef.current) return;
+    const L = await import('leaflet');
+    // Supprimer la couche actuelle
+    mapInstanceRef.current.eachLayer((layer: any) => {
+      if (layer instanceof L.TileLayer) {
+        mapInstanceRef.current.removeLayer(layer);
+      }
+    });
+    const config = layerConfigs[layerType];
+    if ('baseUrl' in config && 'labelsUrl' in config) {
+      // Satellite + labels
+      const baseLayer = L.tileLayer(config.baseUrl, {
+        attribution: config.attribution,
+        maxZoom: config.maxZoom,
+        maxNativeZoom: config.maxNativeZoom || config.maxZoom
+      });
+      const labelsLayer = L.tileLayer(config.labelsUrl, {
+        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+        maxZoom: config.maxZoom
+      });
+      baseLayer.addTo(mapInstanceRef.current);
+      labelsLayer.addTo(mapInstanceRef.current);
+    } else {
+      // Couche simple
+      const layerOptions: any = {
+        attribution: config.attribution,
+        maxZoom: config.maxZoom,
+        maxNativeZoom: config.maxNativeZoom
+      };
+      if ('subdomains' in config && config.subdomains) {
+        layerOptions.subdomains = config.subdomains;
+      }
+      const layer = L.tileLayer(config.url, layerOptions);
+      layer.addTo(mapInstanceRef.current);
+    }
+  };
+  // Flag pour indiquer que la carte est prête
+  const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  const currentLayerRef = useRef<any>(null);
-    // Coordonnées de Toulouse, France
-    const initialCenter = { lat: 43.6045, lng: 1.4442 };
+  // Coordonnées demandées par l'utilisateur
   // Ref pour signaler qu'une initialisation est en cours (éviter course condition StrictMode)
   const initializingRef = useRef(false);
+  // const [currentLayer, setCurrentLayer] = useState<BaseLayerKey>('osm'); // inutilisé
   const [currentLayer, setCurrentLayer] = useState<BaseLayerKey>('osm');
   
   // Hook pour le contexte de dessin
@@ -253,26 +294,29 @@ const DiagnosticMapComponent = () => {
           }
         });
       });
+      // Forcer l'ajout des layers à la carte (cas reload)
+      Object.values(elementLayersRef.current).forEach(layer => {
+        if (layer && layer.addTo) {
+          try { layer.addTo(mapInstanceRef.current); } catch {}
+        }
+      });
     };
     sync();
   }, [drawingState.holes, drawingDispatch]);
 
   useEffect(() => {
-    const initMap = async () => {
+  const initMap = async () => {
+      // Initialisation de la carte
       try {
-  if (!mapRef.current) return;
-  // Empêcher ré-initialisation (StrictMode double render). Si une init est déjà en cours, on sort.
-  if (mapInstanceRef.current || initializingRef.current) return;
-  initializingRef.current = true;
-
-        // Nettoyer éventuel _leaflet_id résiduel
+        if (!mapRef.current) return;
+        if (mapInstanceRef.current || initializingRef.current) return;
+        initializingRef.current = true;
         if ((mapRef.current as any)._leaflet_id) {
           try { delete (mapRef.current as any)._leaflet_id; } catch { /* noop */ }
         }
-
-  const L = await import('leaflet');
+        const L = await import('leaflet');
         const map = L.map(mapRef.current, {
-          center: [46.2276, 2.2137],
+          center: [43.56837527315503, 1.5186569801032932],
           zoom: 13,
           zoomControl: true,
           doubleClickZoom: true,
@@ -281,114 +325,88 @@ const DiagnosticMapComponent = () => {
           preferCanvas: false
         });
         mapInstanceRef.current = map;
-
-  updateLayer('osm', L);
-  drawingDispatch({ type: 'SET_MAP', payload: map });
-  debugLog('🎉 Carte initialisée (unique)');
-
-        // Enregistrer les handlers UNE SEULE FOIS et lire l'état via ref
+        await updateLayer(currentLayer);
+        drawingDispatch({ type: 'SET_MAP', payload: map });
+        debugLog('🎉 Carte initialisée (unique)');
+        setMapReady(true);
+        // Handlers pour le dessin (restauration)
         map.on('click', async (e: any) => {
-          const L2 = await import('leaflet'); // lazy au besoin
-            const ds = drawingStateRef.current;
-            const { lat, lng } = e.latlng;
-            debugLog('🖱️ Click map -> mode:', ds.drawingMode);
-            if (ds.drawingMode === 'tee' || ds.drawingMode === 'basket') {
-              createPointElement(ds.drawingMode, { lat, lng }, L2);
-            } else if (ds.drawingMode === 'mandatory') {
-              // Pose directe d'une flèche mandatory, sans path ni dessin
-              const element: CourseElement = {
-                id: generateElementId(),
-                type: 'mandatory',
-                holeNumber: ds.currentHole,
-                position: { lat, lng },
-                properties: {
-                  name: `mandatory ${ds.currentHole}`,
-                  color: getElementColor('mandatory'),
-                  strokeWidth: 6,
-                  fillOpacity: 1,
-                  angle: 0
-                } as import('../types/course-elements').ElementProperties
-              };
-              const color = 'red';
-              const angle = 0;
-              const icon = L2.divIcon({
-                html: `<div style="transform:rotate(${angle}deg);width:40px;height:40px;display:flex;align-items:center;justify-content:center;"><svg width='40' height='40' viewBox='0 0 40 40'><polygon points='10,20 36,20 28,10 28,15 10,15 10,25 28,25 28,30' fill='${color}' stroke='#333' stroke-width='4'/></svg></div>`,
-                className: '', iconSize:[40,40], iconAnchor:[20,20]
-              });
-              const marker = L2.marker([lat, lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
-              marker.on('dragend', () => {
-                const ll = marker.getLatLng();
-                drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: element.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
-              });
-              marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id }); });
-              marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: element.id }); });
-              element.leafletLayer = marker;
-              elementLayersRef.current[element.id] = marker;
-              drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
-            } else if (ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
-              // Premier clic : START_DRAWING, suivants : CONTINUE_DRAWING
-              if (!ds.isDrawing) {
-                drawingDispatch({ type: 'START_DRAWING', payload: { lat, lng } });
-              } else {
-                drawingDispatch({ type: 'CONTINUE_DRAWING', payload: { lat, lng } });
-              }
-            }
-        });
-
-        map.on('dblclick', async (e: any) => {
           const ds = drawingStateRef.current;
-          if (ds.isDrawing && ds.drawingMode && ds.drawingMode !== 'tee' && ds.drawingMode !== 'basket') {
-            const { lat, lng } = e.latlng;
-            const finalPath = [...ds.tempPath, { lat, lng }];
-            const L2 = await import('leaflet');
-            if (ds.drawingMode === 'mandatory') {
-              // Pose d'un marker mandatory comme une corbeille, mais flèche rouge épaisse
-              const element: CourseElement = {
-                id: generateElementId(),
-                type: 'mandatory',
-                holeNumber: ds.currentHole,
+          const { lat, lng } = e.latlng;
+          const currentHole = ds.currentHole;
+          const holeNumber = currentHole;
+          const uuid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+          if (ds.drawingMode === 'tee' || ds.drawingMode === 'basket') {
+            drawingDispatch({
+              type: 'ADD_ELEMENT',
+              payload: {
+                id: uuid(),
+                type: ds.drawingMode,
+                holeNumber,
                 position: { lat, lng },
-                properties: {
-                  name: `mandatory ${ds.currentHole}`,
-                  color: getElementColor('mandatory'),
-                  strokeWidth: 6,
-                  fillOpacity: 1,
-                  angle: 0
-                } as import('../types/course-elements').ElementProperties
-              };
-              const color = 'red';
-              const angle = 0;
-              const icon = L2.divIcon({
-                html: `<div style="transform:rotate(${angle}deg);width:40px;height:40px;display:flex;align-items:center;justify-content:center;"><svg width='40' height='40' viewBox='0 0 40 40'><polygon points='10,20 36,20 28,10 28,15 10,15 10,25 28,25 28,30' fill='${color}' stroke='#333' stroke-width='4'/></svg></div>`,
-                className: '', iconSize:[40,40], iconAnchor:[20,20]
-              });
-              const marker = L2.marker([lat, lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
-              marker.on('dragend', () => {
-                const ll = marker.getLatLng();
-                drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: element.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
-              });
-              marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id }); });
-              marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: element.id }); });
-              element.leafletLayer = marker;
-              elementLayersRef.current[element.id] = marker;
-              drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
-            } else if (ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
-              // Validation des longueurs minimales
-              if (finalPath.length < 3) {
-                drawingDispatch({ type: 'CANCEL_DRAWING' });
-                return;
+                properties: { color: getElementColor(ds.drawingMode) }
               }
-              createPathElement(ds.drawingMode, finalPath, L2);
-            }
-            if (ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
-              drawingDispatch({ type: 'FINISH_DRAWING' });
+            });
+          } else if (ds.drawingMode === 'mandatory') {
+            drawingDispatch({
+              type: 'ADD_ELEMENT',
+              payload: {
+                id: uuid(),
+                type: 'mandatory',
+                holeNumber,
+                position: { lat, lng },
+                properties: { color: getElementColor('mandatory'), angle: 0 }
+              }
+            });
+          } else if (ds.drawingMode === 'ob-zone' || ds.drawingMode === 'hazard') {
+            if (!ds.isDrawing) {
+              drawingDispatch({ type: 'START_DRAWING', payload: { lat, lng } });
+            } else {
+              drawingDispatch({ type: 'CONTINUE_DRAWING', payload: { lat, lng } });
+              // Si double-clic ou assez de points, terminer et ajouter l'élément
+              if (ds.tempPath.length >= (ds.drawingMode === 'ob-zone' ? 3 : 2)) {
+                drawingDispatch({
+                  type: 'ADD_ELEMENT',
+                  payload: {
+                    id: uuid(),
+                    type: ds.drawingMode,
+                    holeNumber,
+                    path: [...ds.tempPath, { lat, lng }],
+                    properties: { color: getElementColor(ds.drawingMode) }
+                  }
+                });
+                drawingDispatch({ type: 'FINISH_DRAWING' });
+              }
             }
           }
         });
+        // Synchroniser tous les éléments persistés dès l'init
+        setTimeout(() => {
+          // Ajout des layers d'éléments
+          Object.values(elementLayersRef.current).forEach(layer => {
+            if (layer && layer.addTo) {
+              try { layer.addTo(mapInstanceRef.current); } catch {}
+            }
+          });
+          // Ajuster la vue pour englober tous les éléments du parcours
+          const allPoints: [number, number][] = [];
+          drawingState.holes.forEach(hole => {
+            hole.elements.forEach(el => {
+              if (el.position) {
+                allPoints.push([el.position.lat, el.position.lng]);
+              }
+              if (el.path) {
+                el.path.forEach(pt => allPoints.push([pt.lat, pt.lng]));
+              }
+            });
+          });
+          if (allPoints.length > 0 && mapInstanceRef.current && allPoints.length > 1) {
+            mapInstanceRef.current.fitBounds(allPoints);
+          }
+        }, 300);
       } catch (err) {
-  debugLog('❌ Erreur init carte:', err);
+        debugLog('❌ Erreur init carte:', err);
       } finally {
-        // Quel que soit le résultat, libérer le flag pour éviter blocage si erreur
         initializingRef.current = false;
       }
     };
@@ -413,156 +431,119 @@ const DiagnosticMapComponent = () => {
   }, [drawingState.map, drawingDispatch]);
 
   // Fonction pour changer de couche
-  const updateLayer = async (layerType: string, L?: any) => {
-    if (!mapInstanceRef.current) return;
-    
-    if (!L) {
-      L = await import('leaflet');
-    }
+    useEffect(() => {
+      const sync = async () => {
+        if (!mapInstanceRef.current || !mapReady) return;
+        const L = (window as any).L || await import('leaflet');
+        // Ensemble des ids présents dans l'état
+        const currentIds = new Set<string>();
+        drawingState.holes.forEach(hole => {
+          hole.elements.forEach(el => currentIds.add(el.id));
+        });
 
-    // Supprimer la couche actuelle
-    if (currentLayerRef.current) {
-      if (Array.isArray(currentLayerRef.current)) {
-        currentLayerRef.current.forEach(layer => mapInstanceRef.current.removeLayer(layer));
-      } else {
-        mapInstanceRef.current.removeLayer(currentLayerRef.current);
-      }
-    }
+        // Supprimer les layers orphelins (plus dans le state)
+        Object.keys(elementLayersRef.current).forEach(id => {
+          if (!currentIds.has(id)) {
+            try { mapInstanceRef.current.removeLayer(elementLayersRef.current[id]); } catch {}
+            delete elementLayersRef.current[id];
+          }
+        });
 
-    const config = layerConfigs[layerType as keyof typeof layerConfigs];
-
-    if (layerType === 'satellite-labels') {
-      // Couche satellite avec labels
-      const satelliteConfig = config as any;
-      const baseLayer = L.tileLayer(satelliteConfig.baseUrl, {
-        attribution: satelliteConfig.attribution,
-        maxZoom: satelliteConfig.maxZoom,
-        maxNativeZoom: satelliteConfig.maxNativeZoom
-      });
-      
-      const labelsLayer = L.tileLayer(satelliteConfig.labelsUrl, {
-        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
-        maxZoom: satelliteConfig.maxZoom,
-        maxNativeZoom: satelliteConfig.maxNativeZoom
-      });
-
-      baseLayer.addTo(mapInstanceRef.current);
-      labelsLayer.addTo(mapInstanceRef.current);
-      currentLayerRef.current = [baseLayer, labelsLayer];
-    } else {
-      // Couche simple
-      const standardConfig = config as any;
-      const options: any = {
-        attribution: standardConfig.attribution,
-        maxZoom: standardConfig.maxZoom,
-        maxNativeZoom: standardConfig.maxNativeZoom
+        // Créer ou mettre à jour les layers correspondants aux éléments du state
+        drawingState.holes.forEach(hole => {
+          hole.elements.forEach(el => {
+            const color = el.properties?.color || getElementColor(el.type);
+            const existing = elementLayersRef.current[el.id];
+            if (!existing) {
+              // Mandatory: marker downward arrow in red circle (always same SVG)
+              if (el.type === 'mandatory') {
+                if (!el.position) return;
+                const angle = (el.properties as import('../types/course-elements').ElementProperties)?.angle ?? 0;
+                const mandatoryIcon = L.divIcon({
+                  html: `<div style="transform:rotate(${angle}deg);width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg width='30' height='30' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'><circle cx='15' cy='15' r='15' fill='#E53935'/><polygon points='12,12 18,12 18,18 24,18 15,27 6,18 12,18' fill='#fff'/></svg></div>`,
+                  className: '', iconSize:[30,30], iconAnchor:[15,15]
+                });
+                const marker = L.marker([el.position.lat, el.position.lng], { icon: mandatoryIcon, draggable: true }).addTo(mapInstanceRef.current);
+                marker.on('dragend', () => {
+                  const ll = marker.getLatLng();
+                  drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
+                  // Forcer le refresh de l'icône après déplacement
+                  setTimeout(() => {
+                    if (marker.setIcon) marker.setIcon(mandatoryIcon);
+                  }, 10);
+                });
+                marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: el.id }); });
+                marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: el.id }); });
+                elementLayersRef.current[el.id] = marker;
+              } else if (el.type === 'tee' || el.type === 'basket') {
+                if (!el.position) return;
+                const glyph = el.type === 'tee' ? 'T' : 'B';
+                const icon = L.divIcon({
+                  html: `<div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg viewBox='0 0 40 40' width='30' height='30'><circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' /><text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text></svg></div>`,
+                  className: '', iconSize:[30,30], iconAnchor:[15,15]
+                });
+                const marker = L.marker([el.position.lat, el.position.lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
+                marker.on('dragend', () => {
+                  const ll = marker.getLatLng();
+                  drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { position: { lat: ll.lat, lng: ll.lng } } } });
+                });
+                marker.on('click', (ev: any) => { ev.originalEvent?.stopPropagation?.(); drawingDispatch({ type: 'SELECT_ELEMENT', payload: el.id }); });
+                marker.on('contextmenu', (ev: any) => { ev.originalEvent?.preventDefault?.(); drawingDispatch({ type: 'DELETE_ELEMENT', payload: el.id }); });
+                elementLayersRef.current[el.id] = marker;
+              } else if ((el.type === 'ob-zone' || el.type === 'hazard') && el.path && el.path.length >= 2) {
+                const latlngs = el.path.map(p => [p.lat, p.lng]);
+                let layer = L.polygon(latlngs, { color, weight: el.properties?.strokeWidth || 2, fillOpacity: el.properties?.fillOpacity ?? 0.3, fillColor: color }).addTo(mapInstanceRef.current);
+                layer.on('click', () => drawingDispatch({ type: 'SELECT_ELEMENT', payload: el.id }));
+                elementLayersRef.current[el.id] = layer;
+              }
+            } else {
+              // Mettre à jour géométrie / style
+              if (el.type === 'mandatory' && el.position && existing.setLatLng && existing.setIcon) {
+                existing.setLatLng([el.position.lat, el.position.lng]);
+                const angle = el.properties?.angle ?? 0;
+                const mandatoryIcon = L.divIcon({
+                  html: `<div style="transform:rotate(${angle}deg);width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg width='30' height='30' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'><circle cx='15' cy='15' r='15' fill='#E53935'/><polygon points='12,12 18,12 18,18 24,18 15,27 6,18 12,18' fill='#fff'/></svg></div>`,
+                  className: '', iconSize:[30,30], iconAnchor:[15,15]
+                });
+                try { existing.setIcon(mandatoryIcon); } catch {}
+              } else if ((el.type === 'tee' || el.type === 'basket') && el.position) {
+                if (existing.setLatLng) { existing.setLatLng([el.position.lat, el.position.lng]); }
+                if (existing.setIcon) {
+                  const glyph = el.type === 'tee' ? 'T' : 'B';
+                  try {
+                    const icon = L.divIcon({
+                      html: `<div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><svg viewBox='0 0 40 40' width='30' height='30'><circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' /><text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text></svg></div>`,
+                      className:'', iconSize:[30,30], iconAnchor:[15,15]
+                    });
+                    existing.setIcon(icon);
+                  } catch {}
+                }
+              } else if (el.path && existing.setLatLngs) {
+                const latlngs = el.path.map(p => [p.lat, p.lng]);
+                try { existing.setLatLngs(latlngs); } catch {}
+                if (existing.setStyle) {
+                  const style: any = { color };
+                  style.fillColor = color;
+                  try { existing.setStyle(style); } catch {}
+                }
+              }
+            }
+          });
+        });
+        // Forcer l'ajout des layers à la carte (cas reload)
+        Object.values(elementLayersRef.current).forEach(layer => {
+          if (layer && layer.addTo) {
+            try { layer.addTo(mapInstanceRef.current); } catch {}
+          }
+        });
       };
-
-      if (standardConfig.subdomains) {
-        options.subdomains = standardConfig.subdomains;
-      }
-
-      const newLayer = L.tileLayer(standardConfig.url, options);
-      newLayer.addTo(mapInstanceRef.current);
-      currentLayerRef.current = newLayer;
-    }
-  };
-
-  // Gestionnaire de changement de couche
-  const handleLayerChange = (layerType: typeof currentLayer) => {
-    setCurrentLayer(layerType);
-    updateLayer(layerType);
-  };
-
-  // (Ancienne fonction setupDrawingEvents supprimée – événements maintenant gérés dans l'effet d'initialisation avec ref.)
-
-  // Créer un élément ponctuel (tee, basket)
-  const createPointElement = (type: 'tee' | 'basket', position: { lat: number; lng: number }, L: any) => {
-    const element: CourseElement = {
-      id: generateElementId(),
-      type,
-      holeNumber: drawingState.currentHole,
-      position,
-      properties: {
-        name: `${type} ${drawingState.currentHole}`,
-        color: getElementColor(type)
-      }
-    };
-
-    // Icône SVG plus nette
-    const color = getElementColor(type);
-    const glyph = type === 'tee' ? 'T' : 'B';
-    const icon = L.divIcon({
-      html: `\n        <div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">\n          <svg viewBox='0 0 40 40' width='30' height='30'>\n            <circle cx='20' cy='20' r='18' fill='${color}' stroke='white' stroke-width='3' />\n            <text x='20' y='24' font-size='16' font-family='Arial, sans-serif' font-weight='bold' fill='white' text-anchor='middle'>${glyph}</text>\n          </svg>\n        </div>` ,
-      className: '',
-      iconSize: [30, 30],
-      iconAnchor: [15, 15]
-    });
-
-    const marker = L.marker([position.lat, position.lng], { icon, draggable: true }).addTo(mapInstanceRef.current);
-    marker.on('dragend', () => {
-      const newLatLng = marker.getLatLng();
-      drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: element.id, updates: { position: { lat: newLatLng.lat, lng: newLatLng.lng } } }});
-    });
-    
-    marker.on('click', (ev: any) => {
-      ev.originalEvent?.stopPropagation?.();
-      drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id });
-    });
-    marker.on('contextmenu', (ev: any) => {
-      ev.originalEvent?.preventDefault?.();
-      drawingDispatch({ type: 'DELETE_ELEMENT', payload: element.id });
-      if (marker && mapInstanceRef.current) {
-        mapInstanceRef.current.removeLayer(marker);
-      }
-    });
-
-    element.leafletLayer = marker; // vestigial (sera perdu dans snapshots) mais laissé pour compat
-    elementLayersRef.current[element.id] = marker;
-    drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
-  };
+      sync();
+    }, [drawingState.holes, drawingDispatch, mapReady]);
+  // ...autres hooks et logique...
 
   // Créer un élément de chemin (zone, ligne)
-  const createPathElement = (
-  type: 'ob-zone' | 'hazard', 
-    path: { lat: number; lng: number }[], 
-    L: any
-  ) => {
-    if (path.length < 2) return; // Besoin d'au moins 2 points
-
-    const element: CourseElement = {
-      id: generateElementId(),
-      type,
-      holeNumber: drawingState.currentHole,
-      path,
-      properties: {
-        name: `${type} ${drawingState.currentHole}`,
-        color: getElementColor(type),
-  strokeWidth: 2,
-  fillOpacity: 0.3
-      }
-    };
-
-    // Convertir en format Leaflet
-    const latlngs = path.map(p => [p.lat, p.lng]);
-
-    let layer;
-    // Zone (polygon)
-    layer = L.polygon(latlngs, {
-      color: element.properties!.color,
-      weight: element.properties!.strokeWidth,
-      fillOpacity: element.properties!.fillOpacity,
-      fillColor: element.properties!.color
-    }).addTo(mapInstanceRef.current);
-
-    layer.on('click', () => {
-      drawingDispatch({ type: 'SELECT_ELEMENT', payload: element.id });
-    });
-
-    element.leafletLayer = layer;
-    elementLayersRef.current[element.id] = layer;
-    drawingDispatch({ type: 'ADD_ELEMENT', payload: element });
-  };
+  // Fonction createPathElement inutilisée supprimée
+  // ...autres fonctions utilitaires...
 
   return (
     <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
@@ -611,42 +592,60 @@ const DiagnosticMapComponent = () => {
           }}
         >
           <Button
-            onClick={() => handleLayerChange('osm')}
+            onClick={async () => {
+              setCurrentLayer('osm');
+              await updateLayer('osm');
+            }}
             variant={currentLayer === 'osm' ? 'contained' : 'outlined'}
             startIcon={<MapIcon />}
           >
             Carte OSM
           </Button>
           <Button
-            onClick={() => handleLayerChange('satellite')}
+            onClick={async () => {
+              setCurrentLayer('satellite');
+              await updateLayer('satellite');
+            }}
             variant={currentLayer === 'satellite' ? 'contained' : 'outlined'}
             startIcon={<Satellite />}
           >
             Satellite Esri
           </Button>
           <Button
-            onClick={() => handleLayerChange('satellite-hd')}
+            onClick={async () => {
+              setCurrentLayer('satellite-hd');
+              await updateLayer('satellite-hd');
+            }}
             variant={currentLayer === 'satellite-hd' ? 'contained' : 'outlined'}
             startIcon={<HighQuality />}
           >
             Sat HD Google
           </Button>
           <Button
-            onClick={() => handleLayerChange('satellite-labels')}
+            onClick={async () => {
+              setCurrentLayer('satellite-labels');
+              await updateLayer('satellite-labels');
+            }}
             variant={currentLayer === 'satellite-labels' ? 'contained' : 'outlined'}
             startIcon={<Layers />}
           >
             Sat + Labels
           </Button>
           <Button
-            onClick={() => handleLayerChange('satellite-hybrid')}
+            onClick={async () => {
+              setCurrentLayer('satellite-hybrid');
+              await updateLayer('satellite-hybrid');
+            }}
             variant={currentLayer === 'satellite-hybrid' ? 'contained' : 'outlined'}
             startIcon={<Public />}
           >
             Google Hybrid
           </Button>
           <Button
-            onClick={() => handleLayerChange('topo')}
+            onClick={async () => {
+              setCurrentLayer('topo');
+              await updateLayer('topo');
+            }}
             variant={currentLayer === 'topo' ? 'contained' : 'outlined'}
             startIcon={<Terrain />}
           >
