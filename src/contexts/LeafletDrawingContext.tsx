@@ -65,22 +65,92 @@ const getPolygonCenter = (coordinates: Position[]): Position => {
     return { lat: lat / coordinates.length, lng: lng / coordinates.length };
 }
 
+const getTeePosition = (tee: CourseElement): Position | undefined => {
+    if (tee.position) return tee.position;
+    if (tee.coordinates) return getPolygonCenter(tee.coordinates);
+    return undefined;
+}
+
 const recomputeHoleDistance = (hole: CourseHole): CourseHole => {
     const tee = hole.elements.find(e => e.type === 'tee');
     const basket = hole.elements.find(e => e.type === 'basket' && e.position);
 
-    if (tee && basket && tee.coordinates && basket.position) {
-      const teeCenter = getPolygonCenter(tee.coordinates);
-      const toRad = (d: number) => d * Math.PI / 180;
-      const R = 6371000;
-      const dLat = toRad(basket.position.lat - teeCenter.lat);
-      const dLng = toRad(basket.position.lng - teeCenter.lng);
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(teeCenter.lat)) * Math.cos(toRad(basket.position.lat)) * Math.sin(dLng / 2) ** 2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return { ...hole, distance: Math.round(R * c) };
+    if (tee && basket) {
+      const teePosition = getTeePosition(tee);
+      if (teePosition && basket.position) {
+        const toRad = (d: number) => d * Math.PI / 180;
+        const R = 6371000;
+        const dLat = toRad(basket.position.lat - teePosition.lat);
+        const dLng = toRad(basket.position.lng - teePosition.lng);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(teePosition.lat)) * Math.cos(toRad(basket.position.lat)) * Math.sin(dLng / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return { ...hole, distance: Math.round(R * c) };
+      }
     }
     return { ...hole, distance: undefined };
 };
+
+const synchronizeFlightPaths = (holes: CourseHole[]): CourseHole[] => {
+  return holes.map(hole => {
+    const tee = hole.elements.find(e => e.type === 'tee');
+    const basket = hole.elements.find(e => e.type === 'basket');
+    const flightPath = hole.elements.find(e => e.type === 'flight-path');
+    
+    const teePos = tee ? getTeePosition(tee) : undefined;
+    const basketPos = basket?.position;
+
+    let updatedElements = [...hole.elements];
+
+    if (teePos && basketPos) {
+      if (!flightPath) {
+        // CREATE: Add flight path if it's missing
+        const midPoint = {
+          lat: (teePos.lat + basketPos.lat) / 2,
+          lng: (teePos.lng + basketPos.lng) / 2
+        };
+        const newFlightPath: CourseElement = {
+          id: generateId(),
+          type: 'flight-path',
+          holeNumber: hole.number,
+          path: [teePos, midPoint, basketPos],
+          properties: { color: getElementColor({type: 'flight-path'} as CourseElement) },
+        };
+        updatedElements.push(newFlightPath);
+
+      } else {
+        // UPDATE: Sync flight path ends with tee/basket position
+        const teeChanged = flightPath.path[0].lat !== teePos.lat || flightPath.path[0].lng !== teePos.lng;
+        const basketChanged = flightPath.path[flightPath.path.length - 1].lat !== basketPos.lat || flightPath.path[flightPath.path.length - 1].lng !== basketPos.lng;
+        
+        if (teeChanged || basketChanged) {
+          const newPath = [...flightPath.path];
+          newPath[0] = teePos;
+          newPath[newPath.length - 1] = basketPos;
+          
+          updatedElements = updatedElements.map(el => 
+            el.id === flightPath.id ? { ...flightPath, path: newPath } : el
+          );
+        }
+      }
+    } else {
+      // DELETE: Remove flight path if tee or basket is missing
+      if (flightPath) {
+        updatedElements = updatedElements.filter(el => el.type !== 'flight-path');
+      }
+    }
+
+    if (updatedElements.length !== hole.elements.length) {
+      return { ...hole, elements: updatedElements };
+    }
+    // Check if deep equals, otherwise return the original hole
+    if (JSON.stringify(hole.elements) !== JSON.stringify(updatedElements)) {
+         return { ...hole, elements: updatedElements };
+    }
+
+    return hole;
+  });
+};
+
 const recalcAllDistances = (holes: CourseHole[]) => holes.map(recomputeHoleDistance);
 
 const calculateDistance = (points: {lat: number, lng: number}[]): number => {
@@ -123,21 +193,23 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       const { type, position, path, properties, coordinates } = action.payload;
       const newElement: CourseElement = {
         id: generateId(),
-        type,
+        type: type!,
         holeNumber: state.currentHole,
         position,
         path,
         coordinates,
-        properties: { ...properties, color: properties?.color || getElementColor(type) },
+        properties: { ...properties, color: properties?.color || getElementColor({type} as CourseElement) },
       };
 
       const updatedHoles = stateWithHistory.holes.map(h =>
         h.number === state.currentHole ? { ...h, elements: [...h.elements, newElement] } : h
       );
 
+      const holesWithFlightPaths = synchronizeFlightPaths(updatedHoles);
+      
       return {
         ...stateWithHistory,
-        holes: recalcAllDistances(updatedHoles),
+        holes: recalcAllDistances(holesWithFlightPaths),
         isDrawing: false, tempPath: [], drawingMode: null,
       };
     }
@@ -146,9 +218,11 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         const { id, updates } = action.payload;
         const updatedHoles = stateWithHistory.holes.map(h => ({
             ...h,
-            elements: h.elements.map(el => (el.id === id ? { ...el, ...updates, leafletLayer: el.leafletLayer } : el)),
+            elements: h.elements.map(el => (el.id === id ? { ...el, ...updates } : el)),
         }));
-        return { ...stateWithHistory, holes: recalcAllDistances(updatedHoles) };
+        
+        const holesWithFlightPaths = synchronizeFlightPaths(updatedHoles);
+        return { ...stateWithHistory, holes: recalcAllDistances(holesWithFlightPaths) };
     }
 
     case 'DELETE_ELEMENT': {
@@ -156,9 +230,12 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
             ...h,
             elements: h.elements.filter(el => el.id !== action.payload),
         }));
+
+        const holesWithFlightPaths = synchronizeFlightPaths(updatedHoles);
+
         return {
             ...stateWithHistory,
-            holes: recalcAllDistances(updatedHoles),
+            holes: recalcAllDistances(holesWithFlightPaths),
             selectedElement: state.selectedElement === action.payload ? null : state.selectedElement,
         };
     }
@@ -213,8 +290,8 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         const firstPoint = state.tempPath[0];
         const lastPoint = action.payload;
         if (state.map && state.tempPath.length > 1) {
-            const firstLatLng = state.map.options.crs.project(firstPoint);
-            const lastLatLng = state.map.options.crs.project(lastPoint);
+            const firstLatLng = state.map.options.crs.project(L.latLng(firstPoint));
+            const lastLatLng = state.map.options.crs.project(L.latLng(lastPoint));
             const distance = firstLatLng.distanceTo(lastLatLng);
             if (distance < 10) { 
                 return leafletDrawingReducer(state, { type: 'FINISH_DRAWING' });
@@ -235,6 +312,8 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
           if (state.tempPath.length !== 2) return { ...state, isDrawing: false, tempPath: [] };
           const [p1, p2] = state.tempPath;
           const teeWidth = 1.5; // in meters
+          if (!state.map) return state;
+
           const point1 = state.map.latLngToLayerPoint(p1);
           const point2 = state.map.latLngToLayerPoint(p2);
           
@@ -292,11 +371,12 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
             properties: { ...el.properties, color: el.properties?.color || getElementColor(el.type) },
           })),
         }));
+        const holesWithFlightPaths = synchronizeFlightPaths(sanitizedHoles);
         return {
           ...initialState,
           ...data,
           name: data.name || 'Parcours sans nom',
-          holes: recalcAllDistances(sanitizedHoles),
+          holes: recalcAllDistances(holesWithFlightPaths),
           currentHole: data.currentHole || 1,
           past: [],
           future: [],
@@ -383,7 +463,7 @@ export const LeafletDrawingProvider = ({ children, courseId }: ProviderProps) =>
 export const useLeafletDrawing = () => {
   const context = useContext(LeafletDrawingContext);
   if (!context) {
-    throw new Error('useLeafletDrawing doit être utilisé à l\'intérieur d\'un LeafletDrawingProvider');
+    throw new Error("useLeafletDrawing doit être utilisé dans un LeafletDrawingProvider");
   }
   return context;
 };

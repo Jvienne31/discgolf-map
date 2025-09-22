@@ -10,7 +10,7 @@ export interface Position {
 
 export interface CourseElement {
   id: string;
-  type: 'tee' | 'basket' | 'ob-zone' | 'hazard' | 'mandatory';
+  type: 'tee' | 'basket' | 'ob-zone' | 'hazard' | 'mandatory' | 'flight-path';
   holeNumber: number;
   position?: L.LatLngLiteral;
   path?: L.LatLngLiteral[];

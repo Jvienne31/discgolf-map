@@ -84,7 +84,7 @@ export const COLORS = {
   mandatory: '#ff4136', // Rouge
   obZone: '#ff4136',   // Rouge
   hazard: '#ff851b',    // Orange
-  flightPath: '#00BFFF', // DeepSkyBlue
+  flightPath: '#888888', // Gris
   default: '#808080'    // Gris
 };
 
@@ -98,6 +98,7 @@ export const getElementColor = (element: CourseElement): string => {
     case 'mandatory': return COLORS.mandatory;
     case 'ob-zone': return COLORS.obZone;
     case 'hazard': return COLORS.hazard;
+    case 'flight-path': return COLORS.flightPath;
     default: return COLORS.default;
   }
 };
@@ -119,6 +120,12 @@ export const getPathOptions = (element: CourseElement) => {
         fillColor: color,
         fillOpacity: 0.3,
         dashArray: '5, 5'
+      };
+    case 'flight-path':
+      return {
+        color: color,
+        weight: 3,
+        dashArray: '0'
       };
     default:
       return {
