@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { getElementColor } from '../utils/layers';
-import { CourseElement, CourseHole, SnapshottableState, LeafletDrawingState, LeafletDrawingAction, Measurement } from './types';
+import { CourseElement, CourseHole, SnapshottableState, LeafletDrawingState, LeafletDrawingAction, Measurement, Position } from './types';
 import * as L from 'leaflet';
 
 // --- INITIAL STATE ---
@@ -55,15 +55,27 @@ const pushHistory = (state: LeafletDrawingState, snapshotablePart: Snapshottable
   return { ...state, past: newPast, future: [] };
 };
 
+const getPolygonCenter = (coordinates: Position[]): Position => {
+    let lat = 0;
+    let lng = 0;
+    coordinates.forEach(coord => {
+        lat += coord.lat;
+        lng += coord.lng;
+    });
+    return { lat: lat / coordinates.length, lng: lng / coordinates.length };
+}
+
 const recomputeHoleDistance = (hole: CourseHole): CourseHole => {
-    const tee = hole.elements.find(e => e.type === 'tee' && e.position);
+    const tee = hole.elements.find(e => e.type === 'tee');
     const basket = hole.elements.find(e => e.type === 'basket' && e.position);
-    if (tee && basket && tee.position && basket.position) {
+
+    if (tee && basket && tee.coordinates && basket.position) {
+      const teeCenter = getPolygonCenter(tee.coordinates);
       const toRad = (d: number) => d * Math.PI / 180;
       const R = 6371000;
-      const dLat = toRad(basket.position.lat - tee.position.lat);
-      const dLng = toRad(basket.position.lng - tee.position.lng);
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(tee.position.lat)) * Math.cos(toRad(basket.position.lat)) * Math.sin(dLng / 2) ** 2;
+      const dLat = toRad(basket.position.lat - teeCenter.lat);
+      const dLng = toRad(basket.position.lng - teeCenter.lng);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(teeCenter.lat)) * Math.cos(toRad(basket.position.lat)) * Math.sin(dLng / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return { ...hole, distance: Math.round(R * c) };
     }
@@ -98,7 +110,6 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       return { ...state, map: action.payload };
 
     case 'SET_DRAWING_MODE':
-      // When changing mode, clear any finished measurement, but keep it if we just switch to 'measure'
       const measurement = action.payload === 'measure' ? state.measurement : null;
       return { ...state, drawingMode: action.payload, selectedElement: null, isDrawing: false, tempPath: [], measurement };
 
@@ -109,13 +120,14 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         return { ...stateWithHistory, name: action.payload };
         
     case 'ADD_ELEMENT': {
-      const { type, position, path, properties } = action.payload;
+      const { type, position, path, properties, coordinates } = action.payload;
       const newElement: CourseElement = {
         id: generateId(),
         type,
         holeNumber: state.currentHole,
         position,
         path,
+        coordinates,
         properties: { ...properties, color: properties?.color || getElementColor(type) },
       };
 
@@ -190,6 +202,13 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         return { ...state, measurement: { points: newPoints, distance: calculateDistance(newPoints) }};
       }
       
+      if (state.drawingMode === 'tee') {
+          if (state.tempPath.length === 1) {
+              const newTempPath = [...state.tempPath, action.payload];
+              return leafletDrawingReducer({ ...state, tempPath: newTempPath }, { type: 'FINISH_DRAWING' });
+          }
+      }
+
       if (['ob-zone', 'hazard'].includes(state.drawingMode || '')) {
         const firstPoint = state.tempPath[0];
         const lastPoint = action.payload;
@@ -209,8 +228,36 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
       if (!state.isDrawing) return { ...state, isDrawing: false, tempPath: [] };
 
       if (state.drawingMode === 'measure') {
-          // Finalize measurement but keep it on screen, just stop drawing.
           return { ...state, isDrawing: false, drawingMode: null };
+      }
+
+      if (state.drawingMode === 'tee') {
+          if (state.tempPath.length !== 2) return { ...state, isDrawing: false, tempPath: [] };
+          const [p1, p2] = state.tempPath;
+          const teeWidth = 1.5; // in meters
+          const point1 = state.map.latLngToLayerPoint(p1);
+          const point2 = state.map.latLngToLayerPoint(p2);
+          
+          const angle = Math.atan2(point2.y - point1.y, point2.x - point1.x);
+          
+          const perpAngle = angle + Math.PI / 2;
+
+          const dx = (teeWidth / 2) * Math.cos(perpAngle);
+          const dy = (teeWidth / 2) * Math.sin(perpAngle);
+
+          const c1 = state.map.layerPointToLatLng(L.point(point1.x + dx, point1.y + dy));
+          const c2 = state.map.layerPointToLatLng(L.point(point1.x - dx, point1.y - dy));
+          const c3 = state.map.layerPointToLatLng(L.point(point2.x - dx, point2.y - dy));
+          const c4 = state.map.layerPointToLatLng(L.point(point2.x + dx, point2.y + dy));
+          
+          const newElementAction: LeafletDrawingAction = {
+              type: 'ADD_ELEMENT',
+              payload: {
+                  type: 'tee',
+                  coordinates: [c1, c2, c3, c4],
+              }
+          };
+          return leafletDrawingReducer(state, newElementAction);
       }
 
       if (state.drawingMode && ['ob-zone', 'hazard'].includes(state.drawingMode)) {

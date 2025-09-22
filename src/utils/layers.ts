@@ -88,8 +88,11 @@ export const COLORS = {
   default: '#808080'    // Gris
 };
 
-export const getElementColor = (elementType: CourseElement['type']): string => {
-  switch (elementType) {
+export const getElementColor = (element: CourseElement): string => {
+  if (element.properties?.color) {
+    return element.properties.color;
+  }
+  switch (element.type) {
     case 'tee': return COLORS.tee;
     case 'basket': return COLORS.basket;
     case 'mandatory': return COLORS.mandatory;
@@ -100,7 +103,7 @@ export const getElementColor = (elementType: CourseElement['type']): string => {
 };
 
 export const getPathOptions = (element: CourseElement) => {
-  const color = element.properties?.color || getElementColor(element.type);
+  const color = getElementColor(element);
   switch (element.type) {
     case 'ob-zone':
       return {

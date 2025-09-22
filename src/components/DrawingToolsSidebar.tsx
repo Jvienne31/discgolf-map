@@ -1,5 +1,5 @@
 
-import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment, Snackbar } from '@mui/material';
+import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment, Snackbar, Slider } from '@mui/material';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import React from 'react';
 import { Add, Remove, Undo, Redo, Download, Save } from '@mui/icons-material';
@@ -247,6 +247,19 @@ const DrawingToolsSidebar = () => {
               onChange={(e) => dispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { properties: { ...el.properties, color: e.target.value } } } })}
               sx={{ mb: 1 }}
             />
+            {(el.type === 'mandatory' || el.type === 'tee') && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Rotation</Typography>
+                  <Slider
+                    value={el.properties?.angle || 0}
+                    min={-180}
+                    max={180}
+                    step={1}
+                    onChange={(_, value) => dispatch({ type: 'UPDATE_ELEMENT', payload: { id: el.id, updates: { properties: { ...el.properties, angle: value as number } } } })}
+                    valueLabelDisplay="auto"
+                  />
+                </Box>
+            )}
             <Button size="small" color="error" onClick={() => dispatch({ type: 'DELETE_ELEMENT', payload: el.id })}>Supprimer</Button>
           </Box>
         );
@@ -272,7 +285,7 @@ const DrawingToolsSidebar = () => {
       {state.drawingMode && (
         <Box sx={{ mt:1, p:1, background:'#f5f5f5', borderRadius:1 }}>
           <Typography variant="caption" color="text.secondary">
-            {state.drawingMode === 'tee' && '🎯 Tee: un clic pour placer.'}
+            {state.drawingMode === 'tee' && '🎯 Tee: deux clics pour définir le début et la fin.'}
             {state.drawingMode === 'basket' && '🥏 Panier: un clic pour placer.'}
             {state.drawingMode === 'mandatory' && '⬆️ Mandatory: cliquez pour poser une flèche.'}
             {state.drawingMode === 'ob-zone' && '❌ Zone OB: clics successifs, double‑clic pour fermer.'}

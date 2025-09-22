@@ -3,12 +3,18 @@ import * as L from 'leaflet';
 
 // --- DATA & STATE STRUCTURES ---
 
+export interface Position {
+    lat: number;
+    lng: number;
+}
+
 export interface CourseElement {
   id: string;
   type: 'tee' | 'basket' | 'ob-zone' | 'hazard' | 'mandatory';
   holeNumber: number;
   position?: L.LatLngLiteral;
   path?: L.LatLngLiteral[];
+  coordinates?: L.LatLngLiteral[];
   properties?: { [key: string]: any };
   leafletLayer?: L.Layer;
 }

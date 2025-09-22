@@ -280,18 +280,43 @@ const DiagnosticMapComponent = () => {
 
 
   const createDivIcon = (L: any, el: CourseElement) => {
-    const color = getElementColor(el.type);
+    const color = getElementColor(el);
     let html = '';
+    let iconSize: [number, number] = [30, 30]; // Default
 
-    if (el.type === 'tee' || el.type === 'basket') {
-      const glyph = el.type === 'tee' ? 'T' : 'B';
-      html = `<div style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background-color:${color};color:white;font-weight:bold;font-size:16px;border: 2px solid white;">${glyph}</div>`;
+    if (el.type === 'tee') {
+      iconSize = [24, 34];
+      html = `<svg width="24" height="34" viewBox="0 0 24 34"><rect x="0" y="0" width="24" height="34" fill="${color}" stroke="white" stroke-width="2" rx="4" /><text x="12" y="21" font-size="16" fill="white" text-anchor="middle" font-weight="bold">${el.holeNumber || 'T'}</text></svg>`;
+    } else if (el.type === 'basket') {
+      iconSize = [34, 34];
+      html = `
+        <svg viewBox="0 0 24 24" width="34" height="34">
+          <circle cx="12" cy="12" r="12" fill="${color}" />
+          <g fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 18v4" />
+            <path d="M6 18h12" />
+            <path d="M6 9c0 3.5 2.5 6 6 6s6-2.5 6-6" />
+            <path d="M7.5 9v6" />
+            <path d="M16.5 9v6" />
+            <path d="M12 9v7" />
+            <path d="M9.5 9v6.5" />
+            <path d="M14.5 9v6.5" />
+            <path d="M6 9h12" />
+            <circle cx="12" cy="5.5" r="1.5" fill="white" stroke="none" />
+          </g>
+        </svg>`;
     } else if (el.type === 'mandatory') {
+      iconSize = [30, 30];
       const angle = el.properties?.angle ?? 0;
       html = `<div style="transform:rotate(${angle}deg);"><svg width='30' height='30' viewBox='0 0 30 30'><circle cx='15' cy='15' r='15' fill='${color}'/><polygon points='12,12 18,12 18,18 24,18 15,27 6,18 12,18' fill='white'/></svg></div>`;
     }
     
-    return L.divIcon({ html, className: '', iconSize: [30, 30], iconAnchor: [15, 15] });
+    return L.divIcon({ 
+        html,
+        className: '',
+        iconSize: iconSize,
+        iconAnchor: [iconSize[0] / 2, iconSize[1] / 2] 
+    });
   };
 
 
