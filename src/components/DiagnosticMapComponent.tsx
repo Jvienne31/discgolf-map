@@ -17,10 +17,10 @@ const DiagnosticMapComponent = () => {
 
   const { state: drawingState, dispatch: drawingDispatch } = useLeafletDrawing();
 
-  const selectedMandatory = drawingState.selectedElement
-    ? drawingState.holes.flatMap(h => h.elements).find(e => e.id === drawingState.selectedElement && e.type === 'mandatory')
+  const selectedRotatableElement = drawingState.selectedElement
+    ? drawingState.holes.flatMap(h => h.elements).find(e => e.id === drawingState.selectedElement && (e.type === 'mandatory' || e.type === 'tee'))
     : null;
-  const angleValue = selectedMandatory?.properties?.angle ?? 0;
+  const angleValue = selectedRotatableElement?.properties?.angle ?? 0;
 
   const drawingStateRef = useRef(drawingState);
   useEffect(() => { drawingStateRef.current = drawingState; }, [drawingState]);
@@ -283,10 +283,11 @@ const DiagnosticMapComponent = () => {
     const color = getElementColor(el);
     let html = '';
     let iconSize: [number, number] = [30, 30]; // Default
+	const angle = el.properties?.angle ?? 0;
 
     if (el.type === 'tee') {
       iconSize = [24, 34];
-      html = `<svg width="24" height="34" viewBox="0 0 24 34"><rect x="0" y="0" width="24" height="34" fill="${color}" stroke="white" stroke-width="2" rx="4" /><text x="12" y="21" font-size="16" fill="white" text-anchor="middle" font-weight="bold">${el.holeNumber || 'T'}</text></svg>`;
+      html = `<div style="transform-origin: center; transform:rotate(${angle}deg);"><svg width="24" height="34" viewBox="0 0 24 34"><rect x="0" y="0" width="24" height="34" fill="${color}" stroke="white" stroke-width="2" rx="4" /><text x="12" y="21" font-size="16" fill="white" text-anchor="middle" font-weight="bold">${el.holeNumber || 'T'}</text></svg></div>`;
     } else if (el.type === 'basket') {
       iconSize = [34, 34];
       html = `
@@ -307,7 +308,6 @@ const DiagnosticMapComponent = () => {
         </svg>`;
     } else if (el.type === 'mandatory') {
       iconSize = [30, 30];
-      const angle = el.properties?.angle ?? 0;
       html = `<div style="transform:rotate(${angle}deg);"><svg width='30' height='30' viewBox='0 0 30 30'><circle cx='15' cy='15' r='15' fill='${color}'/><polygon points='12,12 18,12 18,18 24,18 15,27 6,18 12,18' fill='white'/></svg></div>`;
     }
     
@@ -315,7 +315,7 @@ const DiagnosticMapComponent = () => {
         html,
         className: '',
         iconSize: iconSize,
-        iconAnchor: [iconSize[0] / 2, iconSize[1] / 2] 
+        iconAnchor: [iconSize[0] / 2, iconSize[1]]
     });
   };
 
@@ -350,16 +350,16 @@ const DiagnosticMapComponent = () => {
         </ButtonGroup>
       </Box>
 
-      {selectedMandatory && (
+      {selectedRotatableElement && (
         <Box sx={{ position:'absolute', top:80, left:10, zIndex:1200, background:'#fff', p:2, borderRadius:2, boxShadow:2, minWidth:220 }}>
-          <strong>Rotation de la flèche</strong>
+          <strong>Rotation de l'élément</strong>
           <Slider
             value={angleValue}
             min={0}
             max={359}
             step={1}
             onChange={(_, v) => {
-              drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: selectedMandatory.id, updates: { properties: { ...selectedMandatory.properties, angle: Number(v) } } } });
+              drawingDispatch({ type: 'UPDATE_ELEMENT', payload: { id: selectedRotatableElement.id, updates: { properties: { ...selectedRotatableElement.properties, angle: Number(v) } } } });
             }}
             valueLabelDisplay="auto"
           />
