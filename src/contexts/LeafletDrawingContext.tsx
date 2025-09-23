@@ -190,28 +190,72 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         return { ...stateWithHistory, name: action.payload };
         
     case 'ADD_ELEMENT': {
-      const { type, position, path, properties, coordinates } = action.payload;
-      const newElement: CourseElement = {
-        id: generateId(),
-        type: type!,
-        holeNumber: state.currentHole,
-        position,
-        path,
-        coordinates,
-        properties: { ...properties, color: properties?.color || getElementColor({type} as CourseElement) },
-      };
+        const { type, position, path, properties, coordinates } = action.payload;
+        let newElement: CourseElement;
 
-      const updatedHoles = stateWithHistory.holes.map(h =>
-        h.number === state.currentHole ? { ...h, elements: [...h.elements, newElement] } : h
-      );
+        if (type === 'tee' && position && !coordinates) {
+            const teeWidth = 1.5; // in meters
+            const teeLength = 2.5; // in meters
+            if (!state.map) return state; // Map not ready
 
-      const holesWithFlightPaths = synchronizeFlightPaths(updatedHoles);
-      
-      return {
-        ...stateWithHistory,
-        holes: recalcAllDistances(holesWithFlightPaths),
-        isDrawing: false, tempPath: [], drawingMode: null,
-      };
+            const centerPoint = state.map.latLngToLayerPoint(position);
+            
+            // Default angle is 0, let's make it vertical for simplicity
+            const angleRad = 0;
+            const angleDeg = 0;
+
+            const perpAngle = angleRad + Math.PI / 2;
+            const forwardAngle = angleRad;
+
+            const dxPerp = (teeWidth / 2) * Math.cos(perpAngle);
+            const dyPerp = (teeWidth / 2) * Math.sin(perpAngle);
+            
+            const dxForward = (teeLength / 2) * Math.cos(forwardAngle);
+            const dyForward = (teeLength / 2) * Math.sin(forwardAngle);
+
+            const p1 = L.point(centerPoint.x - dxForward, centerPoint.y);
+            const p2 = L.point(centerPoint.x + dxForward, centerPoint.y);
+
+            const c1 = state.map.layerPointToLatLng(L.point(p1.x + dxPerp, p1.y + dyPerp));
+            const c2 = state.map.layerPointToLatLng(L.point(p1.x - dxPerp, p1.y - dyPerp));
+            const c3 = state.map.layerPointToLatLng(L.point(p2.x - dxPerp, p2.y - dyPerp));
+            const c4 = state.map.layerPointToLatLng(L.point(p2.x + dxPerp, p2.y + dyPerp));
+
+            newElement = {
+                id: generateId(),
+                type: 'tee',
+                holeNumber: state.currentHole,
+                position: position,
+                coordinates: [c1, c2, c3, c4],
+                properties: { 
+                    ...properties,
+                    angle: angleDeg,
+                    color: properties?.color || getElementColor({type} as CourseElement)
+                },
+            };
+        } else {
+            newElement = {
+                id: generateId(),
+                type: type!,
+                holeNumber: state.currentHole,
+                position,
+                path,
+                coordinates,
+                properties: { ...properties, color: properties?.color || getElementColor({type} as CourseElement) },
+            };
+        }
+
+        const updatedHoles = stateWithHistory.holes.map(h =>
+            h.number === state.currentHole ? { ...h, elements: [...h.elements, newElement] } : h
+        );
+
+        const holesWithFlightPaths = synchronizeFlightPaths(updatedHoles);
+        
+        return {
+            ...stateWithHistory,
+            holes: recalcAllDistances(holesWithFlightPaths),
+            isDrawing: false, tempPath: [], drawingMode: null,
+        };
     }
 
     case 'UPDATE_ELEMENT': {
@@ -306,37 +350,6 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
 
       if (state.drawingMode === 'measure') {
           return { ...state, isDrawing: false, drawingMode: null };
-      }
-
-      if (state.drawingMode === 'tee') {
-          if (state.tempPath.length !== 2) return { ...state, isDrawing: false, tempPath: [] };
-          const [p1, p2] = state.tempPath;
-          const teeWidth = 1.5; // in meters
-          if (!state.map) return state;
-
-          const point1 = state.map.latLngToLayerPoint(p1);
-          const point2 = state.map.latLngToLayerPoint(p2);
-          
-          const angle = Math.atan2(point2.y - point1.y, point2.x - point1.x);
-          
-          const perpAngle = angle + Math.PI / 2;
-
-          const dx = (teeWidth / 2) * Math.cos(perpAngle);
-          const dy = (teeWidth / 2) * Math.sin(perpAngle);
-
-          const c1 = state.map.layerPointToLatLng(L.point(point1.x + dx, point1.y + dy));
-          const c2 = state.map.layerPointToLatLng(L.point(point1.x - dx, point1.y - dy));
-          const c3 = state.map.layerPointToLatLng(L.point(point2.x - dx, point2.y - dy));
-          const c4 = state.map.layerPointToLatLng(L.point(point2.x + dx, point2.y + dy));
-          
-          const newElementAction: LeafletDrawingAction = {
-              type: 'ADD_ELEMENT',
-              payload: {
-                  type: 'tee',
-                  coordinates: [c1, c2, c3, c4],
-              }
-          };
-          return leafletDrawingReducer(state, newElementAction);
       }
 
       if (state.drawingMode && ['ob-zone', 'hazard'].includes(state.drawingMode)) {

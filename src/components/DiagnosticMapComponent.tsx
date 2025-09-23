@@ -49,9 +49,9 @@ const DrawingHandler = () => {
   useMapEvents({
     click(e) {
       const { lat, lng } = e.latlng;
-      if (drawingState.drawingMode === 'basket' || drawingState.drawingMode === 'mandatory') {
+      if (drawingState.drawingMode === 'basket' || drawingState.drawingMode === 'mandatory' || drawingState.drawingMode === 'tee') {
         dispatch({ type: 'ADD_ELEMENT', payload: { type: drawingState.drawingMode, position: { lat, lng } } });
-      } else if (drawingState.drawingMode && ['tee', 'ob-zone', 'hazard', 'flight-path'].includes(drawingState.drawingMode)) {
+      } else if (drawingState.drawingMode && ['ob-zone', 'hazard', 'flight-path'].includes(drawingState.drawingMode)) {
         if (!drawingState.isDrawing) {
           dispatch({ type: 'START_DRAWING', payload: { lat, lng } });
         } else {
