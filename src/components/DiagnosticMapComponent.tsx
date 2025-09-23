@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, RefObject } from 'react';
 import { Box, Button, Slider } from '@mui/material';
 import { MapContainer, Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { useLeafletDrawing } from '../contexts/LeafletDrawingContext';
@@ -76,7 +76,7 @@ const DrawingHandler = () => {
   return null;
 };
 
-const MapUpdater = ({ currentLayer, setMapReady }: { currentLayer: BaseLayerKey, setMapReady: (ready: boolean) => void }) => {
+const MapUpdater = ({ currentLayer, setMapReady, containerRef }: { currentLayer: BaseLayerKey, setMapReady: (ready: boolean) => void, containerRef: RefObject<HTMLElement> }) => {
   const map = useMap();
   const { dispatch } = useLeafletDrawing();
 
@@ -103,6 +103,20 @@ const MapUpdater = ({ currentLayer, setMapReady }: { currentLayer: BaseLayerKey,
     newLayer.addTo(map);
 
   }, [currentLayer, map]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+        map.invalidateSize();
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+        resizeObserver.disconnect();
+    };
+  }, [map, containerRef]);
 
   return null;
 };
@@ -268,6 +282,7 @@ const VertexMarkers = ({ element, dispatch }: { element: CourseElement | null, d
 // --- Main Component ---
 
 const DiagnosticMapComponent = () => {
+  const mapContainerRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [currentLayer, setCurrentLayer] = useState<BaseLayerKey>('satellite-hd');
   const { state: drawingState, dispatch: drawingDispatch } = useLeafletDrawing();
@@ -295,7 +310,7 @@ const DiagnosticMapComponent = () => {
   }, [drawingDispatch]);
 
   return (
-    <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
+    <Box ref={mapContainerRef} sx={{ position: 'relative', height: '100%', width: '100%' }}>
       <MapContainer 
         center={[43.568375, 1.518657]} 
         zoom={18} 
@@ -303,7 +318,7 @@ const DiagnosticMapComponent = () => {
         zoomControl={false}
         doubleClickZoom={false}
       >
-        <MapUpdater currentLayer={currentLayer} setMapReady={setMapReady} />
+        <MapUpdater currentLayer={currentLayer} setMapReady={setMapReady} containerRef={mapContainerRef} />
         <DrawingHandler />
         <ElementLayer />
         <TemporaryPath/>
