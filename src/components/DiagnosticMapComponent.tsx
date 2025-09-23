@@ -4,7 +4,7 @@ import { Box, Button, Slider } from '@mui/material';
 import { MapContainer, Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { useLeafletDrawing } from '../contexts/LeafletDrawingContext';
 import { CourseElement, Position } from '../contexts/types';
-import { layerConfigs, layerNames, BaseLayerKey, getElementColor, getPathOptions, COLORS } from '../utils/layers';
+import { layerConfigs, layerNames, BaseLayerKey, getElementColor, getPathOptions, COLORS, SimpleLayerConfig, SatelliteLabelsConfig } from '../utils/layers';
 import MeasurementLayer from './MeasurementLayer';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -84,7 +84,8 @@ const MapUpdater = ({ currentLayer, setMapReady, containerRef }: { currentLayer:
     if (map) {
       dispatch({ type: 'SET_MAP', payload: map });
       map.attributionControl.setPrefix('Disc Golf Companion');
-      if (!map.zoomControl) {
+      // Vérification robuste pour éviter la duplication des contrôles de zoom
+      if (!map.getContainer().querySelector('.leaflet-control-zoom')) {
         L.control.zoom({ position: 'bottomright' }).addTo(map);
       }
       setMapReady(true);
@@ -92,23 +93,36 @@ const MapUpdater = ({ currentLayer, setMapReady, containerRef }: { currentLayer:
   }, [map, dispatch, setMapReady]);
 
   useEffect(() => {
-    const config = layerConfigs[currentLayer];
-    const newLayer = L.tileLayer(config.url, { ...config });
-    
+    // Nettoyer les anciennes couches de tuiles
     map.eachLayer((layer) => {
       if (layer instanceof L.TileLayer) {
         map.removeLayer(layer);
       }
     });
-    newLayer.addTo(map);
 
+    const config = layerConfigs[currentLayer];
+
+    // Gestion du cas spécial pour la couche satellite avec labels
+    if ('baseUrl' in config) {
+      const satelliteConfig = config as SatelliteLabelsConfig;
+      L.tileLayer(satelliteConfig.baseUrl, { ...satelliteConfig }).addTo(map);
+      L.tileLayer(satelliteConfig.labelsUrl, { ...satelliteConfig, zIndex: 10, attribution: '' }).addTo(map); // Ne pas répéter l'attribution
+    } else {
+      // Cas général pour les couches simples
+      const simpleConfig = config as SimpleLayerConfig;
+      L.tileLayer(simpleConfig.url, { ...simpleConfig }).addTo(map);
+    }
   }, [currentLayer, map]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const resizeObserver = new ResizeObserver(() => {
+      try {
         map.invalidateSize();
+      } catch (e) {
+        // Ignorer les erreurs si la carte n'est pas encore prête
+      }
     });
 
     resizeObserver.observe(containerRef.current);
