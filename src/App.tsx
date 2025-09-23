@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { styled, useTheme } from '@mui/material/styles';
-import { Box, AppBar as MuiAppBar, Toolbar, Typography, Drawer, IconButton, useMediaQuery, Button } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, Drawer, IconButton, useMediaQuery, useTheme, Button } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import Sidebar from './components/Sidebar';
 import DiagnosticMapComponent from './components/DiagnosticMapComponent';
@@ -11,39 +10,6 @@ import StartupScreen, { CourseListItem } from './components/StartupScreen';
 const drawerWidth = 300;
 const LAST_COURSE_ID_KEY = 'dgmap_last_active_course_id';
 
-const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })<{ open?: boolean; isMobile?: boolean; }>(({ theme, open, isMobile }) => ({
-  flexGrow: 1,
-  height: '100vh',
-  position: 'relative',
-  transition: theme.transitions.create('margin', {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  marginLeft: 0,
-  ...(!isMobile && open && {
-    transition: theme.transitions.create('margin', {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    marginLeft: `${drawerWidth}px`,
-  }),
-}));
-
-const AppBar = styled(MuiAppBar, { shouldForwardProp: (prop) => prop !== 'open' })<{ open?: boolean; isMobile?: boolean; }>(({ theme, open, isMobile }) => ({
-  transition: theme.transitions.create(['margin', 'width'], {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  ...(!isMobile && open && {
-    width: `calc(100% - ${drawerWidth}px)`,
-    marginLeft: `${drawerWidth}px`,
-    transition: theme.transitions.create(['margin', 'width'], {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-  }),
-}));
-
 const getSavedCourses = (): CourseListItem[] => {
   const courses: CourseListItem[] = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -51,7 +17,7 @@ const getSavedCourses = (): CourseListItem[] => {
     if (key && key.startsWith('dgmap_course_')) {
       try {
         const data = JSON.parse(localStorage.getItem(key) || '{}');
-        courses.push({ id: key, name: data.name || 'Parcours sans nom' });
+        courses.push({ id: key, name: data.name || "Parcours sans nom" });
       } catch(e) {
         console.warn(`Could not parse course data for key: ${key}`, e);
       }
@@ -130,14 +96,20 @@ const App = () => {
   return (
     <LeafletDrawingProvider courseId={activeCourseId}>
       <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <AppBar position="fixed" open={sidebarOpen} isMobile={isMobile} sx={{ backgroundColor: '#2e7d32' }}>
+        <AppBar
+          position="fixed"
+          sx={{
+            zIndex: (theme) => theme.zIndex.drawer + (isMobile ? 0 : 1),
+            backgroundColor: '#2e7d32',
+          }}
+        >
           <Toolbar>
             <IconButton
               color="inherit"
               aria-label="toggle sidebar"
               onClick={toggleSidebar}
               edge="start"
-              sx={{ mr: 2, ...((!isMobile && sidebarOpen) && { display: 'none' }) }}
+              sx={{ mr: 2 }}
             >
               <MenuIcon />
             </IconButton>
@@ -153,13 +125,18 @@ const App = () => {
           open={sidebarOpen}
           onClose={toggleSidebar}
           sx={{
-            width: drawerWidth,
+            width: sidebarOpen ? drawerWidth : 0,
             flexShrink: 0,
+            transition: theme.transitions.create('width', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+            }),
             [`& .MuiDrawer-paper`]: { 
               width: drawerWidth,
               boxSizing: 'border-box',
               marginTop: isMobile ? 0 : '64px', 
               height: isMobile ? '100vh' : 'calc(100vh - 64px)',
+              overflowX: 'hidden',
             },
           }}
           ModalProps={{ keepMounted: true }}
@@ -167,12 +144,21 @@ const App = () => {
           <Sidebar />
         </Drawer>
 
-        <Main open={sidebarOpen} isMobile={isMobile}>
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            height: '100vh',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
           <Toolbar />
-          <Box sx={{ height: 'calc(100vh - 64px)', width: '100%' }}>
+          <Box sx={{ flexGrow: 1, width: '100%' }}>
             <DiagnosticMapComponent />
           </Box>
-        </Main>
+        </Box>
       </Box>
     </LeafletDrawingProvider>
   );

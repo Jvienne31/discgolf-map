@@ -114,7 +114,9 @@ const MapUpdater = ({ currentLayer, setMapReady, containerRef }: { currentLayer:
     resizeObserver.observe(containerRef.current);
 
     return () => {
-        resizeObserver.disconnect();
+      if (containerRef.current) {
+        resizeObserver.unobserve(containerRef.current);
+      }
     };
   }, [map, containerRef]);
 
