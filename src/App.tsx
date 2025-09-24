@@ -95,7 +95,7 @@ const App = () => {
 
   return (
     <LeafletDrawingProvider courseId={activeCourseId}>
-      <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', height: '100vh' }}>
         <AppBar
           position="fixed"
           sx={{

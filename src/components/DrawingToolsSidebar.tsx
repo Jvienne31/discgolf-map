@@ -117,10 +117,12 @@ const DrawingToolsSidebar = () => {
   const { holeElementSummary, flightPathDistance } = useMemo(() => {
     if (!currentHoleData) return { holeElementSummary: null, flightPathDistance: null };
 
-    const summary = currentHoleData.elements.reduce((acc, el) => {
-      acc[el.type] = (acc[el.type] || 0) + 1;
-      return acc;
-    }, {} as Record<CourseElement['type'], number>);
+    const summary = currentHoleData.elements
+      .filter(el => el.type !== 'flight-path') // Exclude flight path from summary
+      .reduce((acc, el) => {
+        acc[el.type] = (acc[el.type] || 0) + 1;
+        return acc;
+      }, {} as Record<CourseElement['type'], number>);
 
     const flightPath = currentHoleData.elements.find(el => el.type === 'flight-path' && el.path && el.path.length >= 2);
     let distance = null;
@@ -144,7 +146,7 @@ const DrawingToolsSidebar = () => {
   
   return (
     <>
-    <Box sx={{ width: '100%', p: 2, overflowY: 'auto', height: 'calc(100vh - 64px)' }}>
+    <Box sx={{ width: '100%', p: 2, overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
         {/* Course Name */}
         <TextField
             id="course-name-input"
