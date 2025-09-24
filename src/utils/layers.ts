@@ -84,7 +84,7 @@ export const COLORS = {
   mandatory: '#ff4136', // Rouge
   obZone: '#ff4136',   // Rouge
   hazard: '#ff851b',    // Orange
-  flightPath: '#888888', // Gris
+  flightPath: '#FFFFFF', // Blanc
   default: '#808080'    // Gris
 };
 

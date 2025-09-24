@@ -19,7 +19,7 @@ const createDivIcon = (el: CourseElement, isSelected: boolean): L.DivIcon => {
   const angle = el.properties?.angle ?? 0;
   const opacity = isSelected ? 1 : 0.9;
   const scale = isSelected ? 1.15 : 1;
-  const transformOrigin = (el.type === 'tee' || el.type === 'mandatory') ? 'center' : 'bottom center';
+  const transformOrigin = (el.type === 'tee' || el.type === 'mandatory' || el.type === 'basket') ? 'center' : 'bottom center';
   const commonStyle = `transform-origin: ${transformOrigin}; transform: scale(${scale}); opacity: ${opacity}; transition: transform 0.1s ease, opacity 0.1s ease;`;
 
   if (el.type === 'tee') {
@@ -36,7 +36,7 @@ const createDivIcon = (el: CourseElement, isSelected: boolean): L.DivIcon => {
       html = `<div style="transform-origin: center; transform: ${transform}; opacity: ${opacity}; transition: transform 0.1s ease, opacity 0.1s ease;"><svg width='30' height='30' viewBox='0 0 30 30'><circle cx='15' cy='15' r='14' fill='${color}' stroke="${isSelected ? '#00aaff' : 'white'}" stroke-width="2"/><polygon points='12,12 18,12 18,18 24,18 15,27 6,18 12,18' fill='white'/></svg></div>`;
   }
 
-  const anchor = (el.type === 'tee' || el.type === 'mandatory') ? L.point(iconSize[0] / 2, iconSize[1] / 2) : L.point(iconSize[0] / 2, iconSize[1]);
+  const anchor = (el.type === 'tee' || el.type === 'mandatory' || el.type === 'basket') ? L.point(iconSize[0] / 2, iconSize[1] / 2) : L.point(iconSize[0] / 2, iconSize[1]);
   
   return L.divIcon({ html, className: '', iconSize: iconSize, iconAnchor: anchor });
 };
