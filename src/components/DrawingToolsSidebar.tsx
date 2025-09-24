@@ -13,6 +13,7 @@ import {
   Straighten
 } from '@mui/icons-material';
 import { useLeafletDrawing, CourseElement, serializeState } from '../contexts/LeafletDrawingContext';
+import * as turf from '@turf/turf';
 
 const DrawingToolsSidebar = () => {
   const { state, dispatch, saveCourse } = useLeafletDrawing();
@@ -113,12 +114,23 @@ const DrawingToolsSidebar = () => {
     }
   };
 
-  const holeElementSummary = useMemo(() => {
-    if (!currentHoleData) return null;
-    return currentHoleData.elements.reduce((acc, el) => {
+  const { holeElementSummary, flightPathDistance } = useMemo(() => {
+    if (!currentHoleData) return { holeElementSummary: null, flightPathDistance: null };
+
+    const summary = currentHoleData.elements.reduce((acc, el) => {
       acc[el.type] = (acc[el.type] || 0) + 1;
       return acc;
     }, {} as Record<CourseElement['type'], number>);
+
+    const flightPath = currentHoleData.elements.find(el => el.type === 'flight-path' && el.path && el.path.length >= 2);
+    let distance = null;
+    if (flightPath) {
+        const line = turf.lineString(flightPath.path.map(p => [p.lng, p.lat]));
+        const curved = turf.bezierSpline(line);
+        distance = turf.length(curved, { units: 'meters' });
+    }
+
+    return { holeElementSummary: summary, flightPathDistance: distance };
   }, [currentHoleData]);
 
   const elementLabels: Record<CourseElement['type'], string> = {
@@ -127,6 +139,7 @@ const DrawingToolsSidebar = () => {
     'ob-zone': 'Zones OB',
     hazard: 'Dangers',
     mandatory: 'Mandatories',
+    'flight-path': 'Trajectoire'
   };
   
   return (
@@ -270,7 +283,13 @@ const DrawingToolsSidebar = () => {
         <Box sx={{ mt:2, p:1.5, background:'#f9f9f9', borderRadius:1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight:'bold', mb:1 }}>Statistiques du Trou</Typography>
           <Box sx={{ fontSize:'0.8rem', display:'grid', gridTemplateColumns: '1fr 1fr', gap: '0 8px' }}>
-            <div><strong>Distance:</strong></div><div>{currentHoleData.distance !== undefined ? `${currentHoleData.distance} m` : '—'}</div>
+            <div><strong>Distance (vol d'oiseau):</strong></div><div>{currentHoleData.distance !== undefined ? `${currentHoleData.distance} m` : '—'}</div>
+            {flightPathDistance && (
+                <>
+                    <div><strong>Distance (trajectoire):</strong></div>
+                    <div>{`${flightPathDistance.toFixed(0)} m`}</div>
+                </>
+            )}
             {holeElementSummary && Object.entries(holeElementSummary).map(([type, count]) => (
                 <React.Fragment key={type}>
                     <div><strong>{elementLabels[type as CourseElement['type']] || type}:</strong></div>
