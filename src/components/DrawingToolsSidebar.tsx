@@ -14,6 +14,8 @@ import {
 } from '@mui/icons-material';
 import { useLeafletDrawing, CourseElement, serializeState } from '../contexts/LeafletDrawingContext';
 import * as turf from '@turf/turf';
+import generateKMLContent from '../utils/kml';
+
 
 const DrawingToolsSidebar = () => {
   const { state, dispatch, saveCourse } = useLeafletDrawing();
@@ -110,7 +112,24 @@ const DrawingToolsSidebar = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch(e) {
-        console.error("Erreur lors de l'exportation", e);
+        console.error("Erreur lors de l'exportation JSON", e);
+    }
+  };
+  
+  const exportKml = () => {
+    try {
+        const kmlContent = generateKMLContent(state.name, state.holes);
+        const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${state.name.replace(/\s+/g, '_').toLowerCase()}_course.kml`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error("Erreur lors de l'exportation KML", e);
     }
   };
 
@@ -330,6 +349,7 @@ const DrawingToolsSidebar = () => {
           {isDirty ? 'Sauvegarder les changements' : 'Sauvegardé'}
         </Button>
         <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportJson}>Exporter JSON</Button>
+        <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportKml}>Exporter KML</Button>
       </Stack>
 
     </Box>
