@@ -1,4 +1,3 @@
-
 import { useMapEvents, Marker, Polygon, Polyline, Circle, Tooltip } from 'react-leaflet';
 import * as L from 'leaflet';
 import { useLeafletDrawing, CourseElement } from '../contexts/LeafletDrawingContext';
@@ -20,6 +19,9 @@ const createCustomIcon = (type: 'basket' | 'mandatory' | 'tee', color: string = 
       case 'mandatory':
           iconHtml = `<div style="transform: rotate(${rotation}deg); width: 24px; height: 24px; font-size: 30px; color: ${color}; text-shadow: 0 0 3px white, 0 0 3px white, 0 0 3px white;">⬆️</div>`;
           break;
+      default:
+        iconHtml = '';
+        break;
   }
 
   return L.divIcon({
@@ -55,7 +57,7 @@ const ElementRenderer = ({ element, isDisabled, isSelected }: { element: CourseE
   const disabledClass = isDisabled ? 'leaflet-element-disabled' : '';
 
   switch (element.type) {
-    case 'tee':
+    case 'tee': {
         const center = element.position || getPolygonCenter(element.coordinates);
         if (!center) return null;
         return (
@@ -81,6 +83,7 @@ const ElementRenderer = ({ element, isDisabled, isSelected }: { element: CourseE
             />
           </React.Fragment>
         )
+    }
     case 'basket':
     case 'mandatory':
       return element.position ? (
@@ -91,7 +94,7 @@ const ElementRenderer = ({ element, isDisabled, isSelected }: { element: CourseE
         />
       ) : null;
     case 'ob-zone':
-    case 'hazard':
+    case 'hazard': {
       if (!element.path || element.path.length < 3) return null;
       const isOb = element.type === 'ob-zone';
       
@@ -109,6 +112,7 @@ const ElementRenderer = ({ element, isDisabled, isSelected }: { element: CourseE
           eventHandlers={eventHandlers}
         />
       );
+    }
     default: return null;
   }
 };
@@ -185,7 +189,7 @@ export const MapInteractions = () => {
             ? { type: state.drawingMode as 'basket' | 'mandatory', position: pos } 
             : pos;
 
-        dispatch({ type: actionType, payload: payload as any });
+        dispatch({ type: actionType, payload: payload as { type: 'basket' | 'mandatory', position: Position } | Position });
       } else {
         dispatch({ type: 'SELECT_ELEMENT', payload: null });
       }
@@ -214,6 +218,6 @@ export const MapInteractions = () => {
         );
       })}
       <TempRenderer />
-    </>
+    </> 
   );
 };

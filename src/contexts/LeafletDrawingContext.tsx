@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { getElementColor } from '../utils/layers';
-import { CourseElement, CourseHole, SnapshottableState, LeafletDrawingState, LeafletDrawingAction, Measurement, Position } from './types';
+import { CourseElement, CourseHole, SnapshottableState, LeafletDrawingState, LeafletDrawingAction, Position } from './types';
 import * as L from 'leaflet';
 
 // --- INITIAL STATE ---
@@ -25,7 +25,7 @@ const initialState: LeafletDrawingState = {
 const generateId = () => `el_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 const cloneElementShallow = (e: CourseElement): Omit<CourseElement, 'leafletLayer'> => {
-  const { leafletLayer, ...rest } = e;
+  const { leafletLayer: _leafletLayer, ...rest } = e;
   return JSON.parse(JSON.stringify(rest));
 };
 
@@ -35,18 +35,27 @@ const cloneHoles = (holes: CourseHole[]): CourseHole[] => holes.map(h => ({
 }));
 
 export const serializeState = (state: LeafletDrawingState): Partial<LeafletDrawingState> => {
-  const { map, leafletLayer, measurement, ...rest } = state as any;
-  return {
-    ...rest,
-    name: state.name,
-    holes: cloneHoles(state.holes),
-    past: [], 
-    future: [],
+    const {
+      map: _map,
+      past: _past,
+      future: _future,
+      isDrawing: _isDrawing,
+      drawingMode: _drawingMode,
+      selectedElement: _selectedElement,
+      tempPath: _tempPath,
+      measurement: _measurement,
+      ...restOfState
+    } = state;
+    
+    return {
+      ...restOfState,
+      name: state.name,
+      holes: cloneHoles(state.holes),
+    };
   };
-};
 
 const snapshot = (state: LeafletDrawingState): SnapshottableState => {
-  const { past, future, map, measurement, ...rest } = state;
+  const { past: _past, future: _future, map: _map, measurement: _measurement, ...rest } = state;
   return { ...rest, name: state.name, holes: cloneHoles(rest.holes) };
 };
 
@@ -179,10 +188,10 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
     case 'SET_MAP':
       return { ...state, map: action.payload };
 
-    case 'SET_DRAWING_MODE':
+    case 'SET_DRAWING_MODE': {
       const measurement = action.payload === 'measure' ? state.measurement : null;
       return { ...state, drawingMode: action.payload, selectedElement: null, isDrawing: false, tempPath: [], measurement };
-
+    }
     case 'SET_CURRENT_HOLE':
       return { ...state, currentHole: action.payload, selectedElement: null, drawingMode: null };
 
@@ -211,7 +220,7 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
             const dyPerp = (teeWidth / 2) * Math.sin(perpAngle);
             
             const dxForward = (teeLength / 2) * Math.cos(forwardAngle);
-            const dyForward = (teeLength / 2) * Math.sin(forwardAngle);
+            const _dyForward = (teeLength / 2) * Math.sin(forwardAngle);
 
             const p1 = L.point(centerPoint.x - dxForward, centerPoint.y);
             const p2 = L.point(centerPoint.x + dxForward, centerPoint.y);

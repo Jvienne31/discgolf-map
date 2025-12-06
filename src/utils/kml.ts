@@ -1,4 +1,3 @@
-
 import { CourseHole, CourseElement } from '../contexts/types';
 import * as L from 'leaflet';
 import * as turf from '@turf/turf';
@@ -72,11 +71,12 @@ const createPlacemark = (element: CourseElement, holeNumber: number): string => 
             return element.position ? createPointPlacemark(name, '#tee-style', element.position) : '';
         case 'basket':
             return element.position ? createPointPlacemark(name, '#basket-style', element.position) : '';
-        case 'mandatory':
+        case 'mandatory': {
             if (!element.position) return '';
             const kmlHeading = (-(element.properties?.angle || 0) + 360) % 360;
             const styleUrl = `#mandatory-style-${kmlHeading}`;
             return createPointPlacemark(name, styleUrl, element.position);
+        }
         case 'flight-path':
             return (element.path && element.path.length >= 2) ? createFlightPathPlacemark(name, '#flight-path-style', element.path) : '';
         case 'ob-zone':

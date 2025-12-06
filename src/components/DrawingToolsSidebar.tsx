@@ -5,7 +5,7 @@ import React from 'react';
 import { Add, Remove, Undo, Redo, Download, Save } from '@mui/icons-material';
 import { 
   NearMe, 
-  SportsMartialArts, 
+  TrackChanges, 
   Block, 
   Warning, 
   TrendingFlat,
@@ -57,18 +57,24 @@ const DrawingToolsSidebar = () => {
     return () => window.removeEventListener('keydown', keyHandler);
   }, [keyHandler]);
 
-  const handleToolSelect = (tool: CourseElement['type'] | 'measure' | null) => {
+  type DrawingTool = {
+    type: CourseElement['type'] | 'measure' | null;
+    label: string;
+    icon: React.ReactElement;
+  };
+
+  const handleToolSelect = (tool: DrawingTool['type']) => {
     dispatch({ type: 'SET_DRAWING_MODE', payload: tool });
   };
 
-  const tools = [
+  const tools: DrawingTool[] = [
     { type: null, label: 'Sélectionner', icon: <TouchApp /> },
-    { type: 'measure' as any, label: 'Mesurer', icon: <Straighten /> },
-    { type: 'tee' as const, label: 'Tee', icon: <NearMe /> },
-    { type: 'basket' as const, label: 'Panier', icon: <SportsMartialArts /> },
-    { type: 'ob-zone' as const, label: 'Zone OB', icon: <Block /> },
-    { type: 'hazard' as const, label: 'Danger', icon: <Warning /> },
-    { type: 'mandatory' as const, label: 'Mandatory', icon: <TrendingFlat /> },
+    { type: 'measure', label: 'Mesurer', icon: <Straighten /> },
+    { type: 'tee', label: 'Tee', icon: <NearMe /> },
+    { type: 'basket', label: 'Panier', icon: <TrackChanges /> },
+    { type: 'ob-zone', label: 'Zone OB', icon: <Block /> },
+    { type: 'hazard', label: 'Danger', icon: <Warning /> },
+    { type: 'mandatory', label: 'Mandatory', icon: <TrendingFlat /> },
   ];
 
   const cancelDrawing = () => dispatch({ type: 'CANCEL_DRAWING' });

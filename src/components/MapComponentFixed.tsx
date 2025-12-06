@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, ButtonGroup, Button } from '@mui/material';
-import { Satellite, Map as MapIcon, Terrain, Layers, HighQuality, Public } from '@mui/icons-material';
+import { Box, ButtonGroup, Button, Typography } from '@mui/material';
+import { Satellite, Map as MapIcon, Terrain } from '@mui/icons-material';
 
-// Import global de Leaflet
 declare const L: any;
 
 type LayerType = 'osm' | 'satellite' | 'satellite-hd' | 'satellite-labels' | 'satellite-hybrid' | 'topo';
@@ -14,7 +13,6 @@ const MapComponentFixed = () => {
   const [currentLayer, setCurrentLayer] = useState<LayerType>('osm');
   const [mapReady, setMapReady] = useState(false);
 
-  // Configuration des couches
   const layerConfigs = {
     osm: {
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -57,32 +55,46 @@ const MapComponentFixed = () => {
     }
   };
 
-  const layerNames = {
-    osm: 'OpenStreetMap',
-    satellite: 'Satellite Esri',
-    'satellite-hd': 'Satellite HD Google',
-    'satellite-labels': 'Satellite + Labels',
-    'satellite-hybrid': 'Google Hybrid',
-    topo: 'Topographique'
+  const updateLayer = (layerId: LayerType) => {
+    if (!mapInstanceRef.current) return;
+
+    if (currentLayerRef.current) {
+        mapInstanceRef.current.removeLayer(currentLayerRef.current);
+    }
+
+    const config = layerConfigs[layerId];
+    if (!config) return;
+
+    if (layerId === 'satellite-labels' && 'baseUrl' in config) {
+        const baseLayer = L.tileLayer((config as any).baseUrl, { ...config, attribution: '' });
+        const labelsLayer = L.tileLayer((config as any).labelsUrl, { ...config, attribution: config.attribution });
+        const groupLayer = L.layerGroup([baseLayer, labelsLayer]);
+        currentLayerRef.current = groupLayer;
+    } else if ('url' in config) {
+        currentLayerRef.current = L.tileLayer(config.url, config);
+    }
+
+    if (currentLayerRef.current) {
+        mapInstanceRef.current.addLayer(currentLayerRef.current);
+    }
   };
 
-  // Initialisation de Leaflet et de la carte
+  useEffect(() => {
+    if (mapReady) {
+      updateLayer(currentLayer);
+    }
+  }, [currentLayer, mapReady]);
+
   useEffect(() => {
     const initLeaflet = () => {
       if (typeof window !== 'undefined' && !window.L) {
-        // Charger le CSS
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
-        link.crossOrigin = '';
         document.head.appendChild(link);
 
-        // Charger le JS
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
-        script.crossOrigin = '';
         script.onload = () => initMap();
         document.head.appendChild(script);
       } else if (window.L) {
@@ -93,9 +105,8 @@ const MapComponentFixed = () => {
     const initMap = () => {
       if (mapRef.current && !mapInstanceRef.current && window.L) {
         try {
-          // Création de la carte
           const map = window.L.map(mapRef.current, {
-            center: [46.2276, 2.2137], // Centre de la France
+            center: [46.2276, 2.2137],
             zoom: 13,
             zoomControl: true,
             doubleClickZoom: true,
@@ -106,7 +117,6 @@ const MapComponentFixed = () => {
           
           mapInstanceRef.current = map;
           
-          // Ajout de la couche initiale
           updateLayer(currentLayer);
           setMapReady(true);
           
@@ -119,29 +129,18 @@ const MapComponentFixed = () => {
 
     initLeaflet();
 
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
   return (
     <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
-      {/* Zone de la carte temporaire */}
-      <Box
-        sx={{
-          height: '100%',
-          width: '100%',
-          backgroundColor: '#4caf50',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column'
-        }}
-      >
-        <Typography variant="h4" sx={{ color: 'white', mb: 2 }}>
-          🗺️ Carte Leaflet en cours de réparation
-        </Typography>
-        <Typography variant="body1" sx={{ color: 'white', textAlign: 'center', mb: 2 }}>
-          Couche actuelle: {currentLayer}
-        </Typography>
-      </Box>
+      <Box ref={mapRef} sx={{ height: '100%', width: '100%' }} />
 
-      {/* Sélecteur de couches - qui fonctionne */}
       <Box
         sx={{
           position: 'absolute',
@@ -181,7 +180,6 @@ const MapComponentFixed = () => {
         </ButtonGroup>
       </Box>
 
-      {/* Informations */}
       <Box
         sx={{
           position: 'absolute',

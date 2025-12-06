@@ -1,9 +1,9 @@
 
-import { useEffect, useState, useMemo, useRef, RefObject } from 'react';
+import { useEffect, useState, useMemo, useRef, RefObject, Dispatch } from 'react';
 import { Box, Button, Slider } from '@mui/material';
 import { MapContainer, Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { useLeafletDrawing } from '../contexts/LeafletDrawingContext';
-import { CourseElement, Position } from '../contexts/types';
+import { CourseElement, Position, LeafletDrawingAction } from '../contexts/types';
 import { layerConfigs, layerNames, BaseLayerKey, getElementColor, getPathOptions, COLORS, SimpleLayerConfig, SatelliteLabelsConfig } from '../utils/layers';
 import MeasurementLayer from './MeasurementLayer';
 import * as L from 'leaflet';
@@ -120,7 +120,7 @@ const MapUpdater = ({ currentLayer, setMapReady, containerRef }: { currentLayer:
     const resizeObserver = new ResizeObserver(() => {
       try {
         map.invalidateSize();
-      } catch (e) {
+      } catch {
         // Ignorer les erreurs si la carte n'est pas encore prête
       }
     });
@@ -204,7 +204,7 @@ const TemporaryPath = () => {
   return <Polyline positions={pts} pathOptions={{...pathOptions, dashArray: '5, 5'}} />;
 };
 
-const VertexMarkers = ({ element, dispatch }: { element: CourseElement | null, dispatch: any }) => {
+const VertexMarkers = ({ element, dispatch }: { element: CourseElement | null, dispatch: Dispatch<LeafletDrawingAction> }) => {
   if (!element || !element.path) return null;
 
   const handleVertexDrag = (index: number, newPos: Position) => {

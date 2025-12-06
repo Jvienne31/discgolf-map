@@ -7,13 +7,14 @@ export const DEBUG_ENABLED = ((): boolean => {
       if (ls === '1' || ls === 'true') return true;
       if (window.location.search.includes('debug=1')) return true;
     }
-  } catch {}
+  } catch (error) {
+    console.error('Failed to check debug status:', error);
+  }
   return true; // default ON for now; set to false when stable
 })();
 
-export const debugLog = (...args: any[]) => {
+export const debugLog = (...args: unknown[]) => {
   if (DEBUG_ENABLED) {
-    // eslint-disable-next-line no-console
     console.log(...args);
   }
 };

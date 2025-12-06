@@ -37,6 +37,12 @@ declare module '@turf/turf' {
     tessa?: number;
   }
 
+  export interface FeatureOptions {
+    bbox?: number[];
+    id?: string | number;
+  }
+
+
   /**
    * Buffers a GeoJSON feature.
    *
@@ -76,7 +82,7 @@ declare module '@turf/turf' {
   export function point<P = GeoJsonProperties>(
     coordinates: Position,
     properties?: P,
-    options?: any
+    options?: FeatureOptions
   ): Feature<Point, P>;
 
   /**
@@ -88,9 +94,9 @@ declare module '@turf/turf' {
    * @returns A Polygon feature.
    */
   export function polygon<P = GeoJsonProperties>(
-    coordinates: Position[][][], // GeoJSON Polygon coordinates are typically an array of rings
+    coordinates: Position[][],
     properties?: P,
-    options?: any
+    options?: FeatureOptions
   ): Feature<Polygon, P>;
 
   export function bezierSpline<P = GeoJsonProperties>(

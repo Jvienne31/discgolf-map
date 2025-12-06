@@ -29,7 +29,7 @@ const MapComponentComplete = () => {
       maxNativeZoom: 18
     },
     'satellite-hd': {
-      url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      url: 'https://mt{s}.google.com//lyrs=s&x={x}&y={y}&z={z}',
       attribution: '&copy; Google',
       maxZoom: 22,
       maxNativeZoom: 20,
@@ -43,7 +43,7 @@ const MapComponentComplete = () => {
       maxNativeZoom: 18
     },
     'satellite-hybrid': {
-      url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+      url: 'https://mt{s}.google.cvtom/vt/lyrs=y&x={x}&y={y}&z={z}',
       attribution: '&copy; Google',
       maxZoom: 22,
       maxNativeZoom: 20,
