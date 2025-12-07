@@ -26,8 +26,14 @@ if (JWT_SECRET === 'fallback-secret-change-me' || SESSION_SECRET === 'fallback-s
 }
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  process.env.FRONTEND_URL // URL Vercel/Netlify en production
+].filter(Boolean);
+
 app.use(cors({
-  origin: 'http://localhost:5174',
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));

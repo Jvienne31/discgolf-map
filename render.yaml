@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: discgolf-api
+    runtime: node
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: DEFAULT_ADMIN_USERNAME
+        value: Jvienne31
+      - key: DEFAULT_ADMIN_PASSWORD
+        sync: false
+      - key: DEFAULT_USER1_USERNAME
+        value: SpaceDisc
+      - key: DEFAULT_USER1_PASSWORD
+        sync: false
+      - key: DEFAULT_USER2_USERNAME
+        value: LBsport
+      - key: DEFAULT_USER2_PASSWORD
+        sync: false
+      - key: PORT
+        value: 3001
+    disk:
+      name: discgolf-db
+      mountPath: /opt/render/project/src/server
+      sizeGB: 1
