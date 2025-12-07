@@ -1,12 +1,14 @@
 
 import { useState, useEffect } from 'react';
-import { Box, AppBar, Toolbar, Typography, Drawer, IconButton, useMediaQuery, useTheme, Button } from '@mui/material';
+import { Box, AppBar, Toolbar, Typography, Drawer, IconButton, useMediaQuery, useTheme, Button, CircularProgress } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import Sidebar from './components/Sidebar';
 import DiagnosticMapComponent from './components/DiagnosticMapComponent';
 import { LeafletDrawingProvider } from './contexts/LeafletDrawingContext';
 import StartupScreen, { CourseListItem } from './components/StartupScreen';
 import { apiService } from './services/api';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
 
 const drawerWidth = 300;
 const LAST_COURSE_ID_KEY = 'dgmap_last_active_course_id';
@@ -20,19 +22,46 @@ const getSavedCourses = async (): Promise<CourseListItem[]> => {
   }
 };
 
-const App = () => {
+const AppContent = () => {
+  const { isAuthenticated, loading } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   
+  // Tous les hooks doivent être appelés avant tout return conditionnel
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(() => {
       if (typeof window !== 'undefined') {
           return localStorage.getItem(LAST_COURSE_ID_KEY);
       }
       return null;
   });
-  
   const [courses, setCourses] = useState<CourseListItem[]>([]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const loadCourses = async () => {
+      const loadedCourses = await getSavedCourses();
+      setCourses(loadedCourses);
+    };
+    loadCourses();
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [isMobile, isAuthenticated]);
+
+  // Maintenant on peut faire les returns conditionnels après tous les hooks
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   const handleSetActiveCourseId = (courseId: string | null) => {
       setActiveCourseId(courseId);
@@ -42,17 +71,6 @@ const App = () => {
           localStorage.removeItem(LAST_COURSE_ID_KEY);
       }
   };
-
-  useEffect(() => {
-    const loadCourses = async () => {
-      const loadedCourses = await getSavedCourses();
-      setCourses(loadedCourses);
-    };
-    loadCourses();
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-  }, [isMobile]);
 
   const handleSelectCourse = (courseId: string) => {
     handleSetActiveCourseId(courseId);
@@ -166,6 +184,14 @@ const App = () => {
         </Box>
       </Box>
     </LeafletDrawingProvider>
+  );
+};
+
+const App = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 

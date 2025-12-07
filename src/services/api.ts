@@ -23,7 +23,9 @@ class ApiService {
   // Récupérer tous les parcours
   async getCourses(): Promise<CourseListItem[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/courses`);
+      const response = await fetch(`${API_BASE_URL}/courses`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -37,7 +39,9 @@ class ApiService {
   // Récupérer un parcours spécifique
   async getCourse(id: string): Promise<CourseData> {
     try {
-      const response = await fetch(`${API_BASE_URL}/courses/${id}`);
+      const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -56,6 +60,7 @@ class ApiService {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(courseData),
       });
       if (!response.ok) {
@@ -76,6 +81,7 @@ class ApiService {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(courseData),
       });
       if (!response.ok) {
@@ -93,6 +99,7 @@ class ApiService {
     try {
       const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
         method: 'DELETE',
+        credentials: 'include'
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
