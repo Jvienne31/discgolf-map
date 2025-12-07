@@ -446,26 +446,26 @@ export const LeafletDrawingProvider = ({ children, courseId }: ProviderProps) =>
   const [state, dispatch] = useReducer(leafletDrawingReducer, initialState);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && courseId) {
-      const savedState = localStorage.getItem(courseId);
-      if (savedState) {
+    const loadCourse = async () => {
+      if (courseId) {
         try {
-          const parsed = JSON.parse(savedState);
-          dispatch({ type: 'LOAD_DATA', payload: parsed });
+          const courseData = await import('../services/api').then(m => m.apiService.getCourse(courseId));
+          dispatch({ type: 'LOAD_DATA', payload: courseData });
         } catch (error) {
-          console.error(`Impossible de charger le parcours ${courseId}. Les données sont peut-être corrompues.`, error);
-        }
-      } else {
+          console.error(`Impossible de charger le parcours ${courseId}:`, error);
           dispatch({ type: 'LOAD_DATA', payload: { ...initialState, name: 'Nouveau Parcours' }});
+        }
       }
-    }
+    };
+    loadCourse();
   }, [courseId]);
 
-  const saveCourse = useCallback(() => {
-    if (courseId && typeof window !== 'undefined') {
+  const saveCourse = useCallback(async () => {
+    if (courseId) {
       try {
         const stateToSave = serializeState(state);
-        localStorage.setItem(courseId, JSON.stringify(stateToSave));
+        const { apiService } = await import('../services/api');
+        await apiService.updateCourse(courseId, { name: state.name, ...stateToSave });
         console.log(`✅ Parcours ${courseId} sauvegardé avec succès !`);
       } catch(e) {
           console.error(`❌ Erreur lors de la sauvegarde du parcours ${courseId}:`, e);

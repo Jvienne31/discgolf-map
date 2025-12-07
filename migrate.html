@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migration des parcours</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #2e7d32;
+    }
+    button {
+      background: #2e7d32;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #1b5e20;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #results {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .success {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+    }
+    .error {
+      background: #ffebee;
+      border-left: 4px solid #f44336;
+    }
+    .info {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 Migration des parcours</h1>
+    <p>Cet outil va migrer vos parcours du localStorage vers la base de données.</p>
+    
+    <div>
+      <button id="checkBtn" onclick="checkCourses()">1. Vérifier les parcours</button>
+      <button id="migrateBtn" onclick="migrate()" disabled>2. Migrer vers la BDD</button>
+      <button id="cleanBtn" onclick="cleanLocalStorage()" disabled>3. Nettoyer localStorage</button>
+    </div>
+    
+    <div id="results"></div>
+  </div>
+
+  <script>
+    let coursesFound = [];
+
+    function log(message, type = 'info') {
+      const results = document.getElementById('results');
+      results.className = type;
+      results.textContent += message + '\n';
+    }
+
+    function clearLog() {
+      document.getElementById('results').textContent = '';
+    }
+
+    async function checkCourses() {
+      clearLog();
+      log('🔍 Vérification des parcours dans le localStorage...\n');
+      
+      coursesFound = [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('dgmap_course_')) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key) || '{}');
+            coursesFound.push({ id: key, ...data });
+            log(`✅ Trouvé: "${data.name || 'Sans nom'}" (${key})`);
+          } catch(e) {
+            log(`⚠️ Erreur sur ${key}: ${e.message}`, 'error');
+          }
+        }
+      }
+      
+      log(`\n📦 Total: ${coursesFound.length} parcours trouvés`);
+      
+      if (coursesFound.length > 0) {
+        document.getElementById('migrateBtn').disabled = false;
+      } else {
+        log('\nℹ️ Aucun parcours à migrer', 'info');
+      }
+    }
+
+    async function migrate() {
+      if (coursesFound.length === 0) {
+        log('⚠️ Veuillez d\'abord vérifier les parcours', 'error');
+        return;
+      }
+
+      clearLog();
+      log('🚀 Début de la migration...\n');
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const course of coursesFound) {
+        try {
+          const response = await fetch('/api/courses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(course),
+          });
+          
+          if (response.ok) {
+            successCount++;
+            log(`✅ "${course.name}" migré avec succès`, 'success');
+          } else {
+            const error = await response.json();
+            errorCount++;
+            log(`❌ Erreur pour "${course.name}": ${error.error || 'Erreur inconnue'}`, 'error');
+          }
+        } catch (error) {
+          errorCount++;
+          log(`❌ Erreur réseau pour "${course.name}": ${error.message}`, 'error');
+        }
+      }
+      
+      log(`\n📊 Résultats:`);
+      log(`   ✅ Réussis: ${successCount}`);
+      log(`   ❌ Échecs: ${errorCount}`);
+      
+      if (successCount > 0) {
+        log('\n✨ Migration terminée avec succès!', 'success');
+        log('Vous pouvez maintenant nettoyer le localStorage.');
+        document.getElementById('cleanBtn').disabled = false;
+      }
+    }
+
+    function cleanLocalStorage() {
+      if (!confirm('⚠️ Êtes-vous sûr de vouloir supprimer les parcours du localStorage?\n\nAssurez-vous que la migration a réussi!')) {
+        return;
+      }
+
+      clearLog();
+      const keys = [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('dgmap_course_')) {
+          keys.push(key);
+        }
+      }
+      
+      keys.forEach(key => {
+        localStorage.removeItem(key);
+        log(`🗑️ Supprimé: ${key}`);
+      });
+      
+      // Supprimer aussi la clé du dernier parcours actif
+      localStorage.removeItem('dgmap_last_active_course_id');
+      
+      log(`\n✅ ${keys.length} parcours supprimés du localStorage`, 'success');
+      log('Rechargez la page pour utiliser les parcours depuis la BDD.');
+      
+      document.getElementById('cleanBtn').disabled = true;
+      document.getElementById('migrateBtn').disabled = true;
+    }
+  </script>
+</body>
+</html>

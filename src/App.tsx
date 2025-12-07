@@ -6,24 +6,18 @@ import Sidebar from './components/Sidebar';
 import DiagnosticMapComponent from './components/DiagnosticMapComponent';
 import { LeafletDrawingProvider } from './contexts/LeafletDrawingContext';
 import StartupScreen, { CourseListItem } from './components/StartupScreen';
+import { apiService } from './services/api';
 
 const drawerWidth = 300;
 const LAST_COURSE_ID_KEY = 'dgmap_last_active_course_id';
 
-const getSavedCourses = (): CourseListItem[] => {
-  const courses: CourseListItem[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('dgmap_course_')) {
-      try {
-        const data = JSON.parse(localStorage.getItem(key) || '{}');
-        courses.push({ id: key, name: data.name || "Parcours sans nom" });
-      } catch(e) {
-        console.warn(`Could not parse course data for key: ${key}`, e);
-      }
-    }
+const getSavedCourses = async (): Promise<CourseListItem[]> => {
+  try {
+    return await apiService.getCourses();
+  } catch (error) {
+    console.error('Erreur lors du chargement des parcours:', error);
+    return [];
   }
-  return courses;
 };
 
 const App = () => {
@@ -50,7 +44,11 @@ const App = () => {
   };
 
   useEffect(() => {
-    setCourses(getSavedCourses());
+    const loadCourses = async () => {
+      const loadedCourses = await getSavedCourses();
+      setCourses(loadedCourses);
+    };
+    loadCourses();
     if (isMobile) {
       setSidebarOpen(false);
     }
@@ -60,23 +58,30 @@ const App = () => {
     handleSetActiveCourseId(courseId);
   };
 
-  const handleCreateCourse = (courseName: string) => {
-    const newCourseId = `dgmap_course_${Date.now()}`;
-    const newCourse = {
-      name: courseName,
-      holes: [{ number: 1, par: 3, elements: [] }],
-      currentHole: 1,
-      past: [],
-      future: [],
-    };
-    localStorage.setItem(newCourseId, JSON.stringify(newCourse));
-    setCourses(getSavedCourses());
-    handleSetActiveCourseId(newCourseId);
+  const handleCreateCourse = async (courseName: string) => {
+    try {
+      const newCourseId = `dgmap_course_${Date.now()}`;
+      const newCourse = {
+        id: newCourseId,
+        name: courseName,
+        holes: [{ number: 1, par: 3, elements: [] }],
+        currentHole: 1,
+        past: [],
+        future: [],
+      };
+      await apiService.createCourse(newCourse);
+      const loadedCourses = await getSavedCourses();
+      setCourses(loadedCourses);
+      handleSetActiveCourseId(newCourseId);
+    } catch (error) {
+      console.error('Erreur lors de la création du parcours:', error);
+    }
   };
 
-  const handleExit = () => {
+  const handleExit = async () => {
     handleSetActiveCourseId(null);
-    setCourses(getSavedCourses());
+    const loadedCourses = await getSavedCourses();
+    setCourses(loadedCourses);
   };
 
   const toggleSidebar = () => {
