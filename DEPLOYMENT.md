@@ -49,10 +49,19 @@ PORT=3001
 5. ✅ Notez cette URL pour l'étape suivante !
 
 ### 1.5 Vérifier le stockage persistant
-✅ Railway **persiste automatiquement** les fichiers dans le système de fichiers !
-- Votre base SQLite `courses.db` sera conservée entre les redémarrages
-- Pas besoin de configurer un volume supplémentaire
-- Le stockage est **illimité** sur Railway
+✅ Railway **persiste automatiquement** les fichiers - **AUCUNE CONFIGURATION REQUISE** !
+
+**Ce qui est persisté automatiquement :**
+- ✅ Votre base SQLite `server/courses.db`
+- ✅ Tous les fichiers dans le dossier `server/`
+- ✅ Stockage illimité
+
+**Comment vérifier :**
+1. Créez un parcours via l'interface web
+2. Redéployez l'application (push un commit)
+3. Le parcours doit toujours être présent après redéploiement
+
+⚠️ **Note** : Contrairement à Render, vous n'avez **RIEN à configurer** - c'est automatique !
 
 ### 1.6 Déployer
 1. Railway déploie **automatiquement** dès que vous pushez sur GitHub
