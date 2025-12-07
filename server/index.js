@@ -160,7 +160,155 @@ app.post('/api/auth/logout', (req, res) => {
 
 // GET /api/auth/me - Vérifier la session
 app.get('/api/auth/me', authenticateToken, (req, res) => {
-  res.json({ user: req.user });
+  const user = db.prepare('SELECT id, username, email, role FROM users WHERE id = ?').get(req.user.id);
+  res.json({ user });
+});
+
+// POST /api/auth/change-password - Changer son mot de passe
+app.post('/api/auth/change-password', authenticateToken, (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Mot de passe actuel et nouveau requis' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
+    }
+    
+    const user = db.prepare('SELECT password FROM users WHERE id = ?').get(req.user.id);
+    
+    const validPassword = bcrypt.compareSync(currentPassword, user.password);
+    
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    }
+    
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.user.id);
+    
+    res.json({ message: 'Mot de passe modifié avec succès' });
+  } catch (error) {
+    console.error('Erreur lors du changement de mot de passe:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/auth/update-email - Modifier son email
+app.post('/api/auth/update-email', authenticateToken, (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Email valide requis' });
+    }
+    
+    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, req.user.id);
+    
+    res.json({ message: 'Email modifié avec succès' });
+  } catch (error) {
+    console.error('Erreur lors de la modification de l\'email:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Routes admin
+
+// GET /api/admin/users - Liste tous les utilisateurs (admin uniquement)
+app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const users = db.prepare('SELECT id, username, email, role, created_at FROM users').all();
+    res.json(users);
+  } catch (error) {
+    console.error('Erreur lors de la récupération des utilisateurs:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/admin/users/:id/password - Voir le mot de passe d'un utilisateur (admin uniquement)
+app.get('/api/admin/users/:id/password', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = db.prepare('SELECT username, password FROM users WHERE id = ?').get(id);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+    
+    // Note: En production, ne JAMAIS renvoyer le hash. C'est une exception pour votre besoin spécifique.
+    res.json({ 
+      username: user.username,
+      passwordHash: user.password,
+      note: 'Hash BCrypt - utilisez reset-password pour définir un nouveau mot de passe'
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération du mot de passe:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/admin/users/:id/reset-password - Réinitialiser le mot de passe d'un utilisateur (admin uniquement)
+app.post('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Mot de passe valide requis (min 6 caractères)' });
+    }
+    
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(id);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+    
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, id);
+    
+    res.json({ message: `Mot de passe de ${user.username} réinitialisé avec succès` });
+  } catch (error) {
+    console.error('Erreur lors de la réinitialisation du mot de passe:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/admin/users/:id - Modifier un utilisateur (admin uniquement)
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, email, role } = req.body;
+    
+    const updates = [];
+    const values = [];
+    
+    if (username) {
+      updates.push('username = ?');
+      values.push(username);
+    }
+    if (email) {
+      updates.push('email = ?');
+      values.push(email);
+    }
+    if (role && ['admin', 'user'].includes(role)) {
+      updates.push('role = ?');
+      values.push(role);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Aucune modification fournie' });
+    }
+    
+    values.push(id);
+    
+    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    
+    res.json({ message: 'Utilisateur modifié avec succès' });
+  } catch (error) {
+    console.error('Erreur lors de la modification de l\'utilisateur:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 });
 
 // Routes API

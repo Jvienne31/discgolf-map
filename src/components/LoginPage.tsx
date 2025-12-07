@@ -10,7 +10,6 @@ import {
   CircularProgress
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
-import SportsMmaIcon from '@mui/icons-material/SportsMma';
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -55,7 +54,18 @@ const LoginPage = () => {
           }}
         >
           <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <SportsMmaIcon sx={{ fontSize: 80, color: '#2e7d32', mb: 2 }} />
+            <Box 
+              component="img"
+              src="/enjoy-disc-golf-logo.png"
+              alt="Enjoy Disc Golf"
+              sx={{ 
+                width: 150, 
+                height: 150, 
+                mb: 2,
+                display: 'block',
+                margin: '0 auto 16px auto'
+              }}
+            />
             <Typography variant="h3" gutterBottom sx={{ fontWeight: 'bold', color: '#1b5e20' }}>
               DiscGolf Mapper
             </Typography>

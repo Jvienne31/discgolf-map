@@ -15,7 +15,22 @@ const LAST_COURSE_ID_KEY = 'dgmap_last_active_course_id';
 
 const getSavedCourses = async (): Promise<CourseListItem[]> => {
   try {
-    return await apiService.getCourses();
+    const courses = await apiService.getCourses();
+    // Enrichir chaque parcours avec le nombre de trous
+    const coursesWithHoleCount = await Promise.all(
+      courses.map(async (course) => {
+        try {
+          const courseData = await apiService.getCourse(course.id);
+          return {
+            ...course,
+            holeCount: courseData.holes?.length || 0
+          };
+        } catch (error) {
+          return course;
+        }
+      })
+    );
+    return coursesWithHoleCount;
   } catch (error) {
     console.error('Erreur lors du chargement des parcours:', error);
     return [];
@@ -102,6 +117,11 @@ const AppContent = () => {
     setCourses(loadedCourses);
   };
 
+  const handleCoursesChange = async () => {
+    const loadedCourses = await getSavedCourses();
+    setCourses(loadedCourses);
+  };
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
@@ -111,7 +131,8 @@ const AppContent = () => {
       <StartupScreen 
         courses={courses} 
         onSelectCourse={handleSelectCourse} 
-        onCreateCourse={handleCreateCourse} 
+        onCreateCourse={handleCreateCourse}
+        onCoursesChange={handleCoursesChange}
       />
     );
   }
