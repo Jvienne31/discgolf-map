@@ -1,8 +1,8 @@
 
-import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment, Snackbar, Slider } from '@mui/material';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment, Snackbar, Slider, Alert } from '@mui/material';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import React from 'react';
-import { Add, Remove, Undo, Redo, Download, Save } from '@mui/icons-material';
+import { Add, Remove, Undo, Redo, Download, Save, Upload } from '@mui/icons-material';
 import { 
   NearMe, 
   TrackChanges, 
@@ -23,6 +23,8 @@ const DrawingToolsSidebar = () => {
   const [pendingDeleteHole, setPendingDeleteHole] = useState<number | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [importError, setImportError] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsDirty(true);
@@ -137,6 +139,103 @@ const DrawingToolsSidebar = () => {
     } catch (e) {
         console.error("Erreur lors de l'exportation KML", e);
     }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportError('');
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        
+        if (file.name.endsWith('.json')) {
+          // Import JSON
+          const data = JSON.parse(content);
+          
+          // Valider que c'est un fichier de parcours valide
+          if (data.holes && Array.isArray(data.holes)) {
+            dispatch({ type: 'IMPORT_COURSE', payload: data });
+            setSnackbarOpen(true);
+          } else {
+            setImportError('Fichier JSON invalide : format de parcours non reconnu');
+          }
+        } else if (file.name.endsWith('.kml')) {
+          // Import KML
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(content, 'text/xml');
+          
+          // Parser le KML et regrouper les éléments par trou
+          const placemarks = xmlDoc.getElementsByTagName('Placemark');
+          const elementsByHole: Record<number, any[]> = {};
+          
+          for (let i = 0; i < placemarks.length; i++) {
+            const placemark = placemarks[i];
+            const name = placemark.getElementsByTagName('name')[0]?.textContent || '';
+            const coordinates = placemark.getElementsByTagName('coordinates')[0]?.textContent;
+            
+            if (coordinates && name) {
+              const coords = coordinates.trim().split(/\s+/).map(coord => {
+                const [lng, lat] = coord.split(',').map(Number);
+                return { lat, lng };
+              })[0]; // Prendre le premier point seulement pour les Points
+              
+              // Extraire le numéro de trou et le type depuis le nom (ex: "Tee 1", "Basket 3")
+              const match = name.match(/(Tee|Basket|Panier)\s+(\d+)/i);
+              if (match) {
+                const type = match[1].toLowerCase() === 'tee' ? 'tee' : 'basket';
+                const holeNumber = parseInt(match[2]);
+                
+                if (!elementsByHole[holeNumber]) {
+                  elementsByHole[holeNumber] = [];
+                }
+                
+                elementsByHole[holeNumber].push({
+                  id: `imported_${holeNumber}_${type}`,
+                  type: type,
+                  position: coords,
+                  holeNumber: holeNumber,
+                  properties: {}
+                });
+              }
+            }
+          }
+          
+          // Créer les trous à partir des éléments regroupés
+          const newHoles = Object.keys(elementsByHole)
+            .map(Number)
+            .sort((a, b) => a - b)
+            .map(holeNumber => ({
+              number: holeNumber,
+              par: 3,
+              elements: elementsByHole[holeNumber]
+            }));
+          
+          if (newHoles.length > 0) {
+            dispatch({ type: 'IMPORT_COURSE', payload: { name: state.name, holes: newHoles } });
+            setSnackbarOpen(true);
+          } else {
+            setImportError('Aucune donnée géographique trouvée dans le fichier KML');
+          }
+        } else {
+          setImportError('Format de fichier non supporté. Utilisez .json ou .kml');
+        }
+      } catch (error) {
+        console.error('Erreur lors de l\'import:', error);
+        setImportError('Erreur lors de la lecture du fichier : ' + (error as Error).message);
+      }
+    };
+
+    reader.readAsText(file);
+    // Reset input pour permettre de réimporter le même fichier
+    event.target.value = '';
   };
 
   const { holeElementSummary, flightPathDistance } = useMemo(() => {
@@ -354,8 +453,29 @@ const DrawingToolsSidebar = () => {
         >
           {isDirty ? 'Sauvegarder les changements' : 'Sauvegardé'}
         </Button>
+        <Divider sx={{ my: 1 }}>
+          <Typography variant="caption" color="text.secondary">Exporter</Typography>
+        </Divider>
         <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportJson}>Exporter JSON</Button>
         <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportKml}>Exporter KML</Button>
+        <Divider sx={{ my: 1 }}>
+          <Typography variant="caption" color="text.secondary">Importer</Typography>
+        </Divider>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,.kml"
+          onChange={handleFileImport}
+          style={{ display: 'none' }}
+        />
+        <Button size="small" variant="outlined" startIcon={<Upload />} onClick={handleImportClick}>
+          Importer KML/JSON
+        </Button>
+        {importError && (
+          <Alert severity="error" onClose={() => setImportError('')} sx={{ fontSize: '0.75rem' }}>
+            {importError}
+          </Alert>
+        )}
       </Stack>
 
     </Box>

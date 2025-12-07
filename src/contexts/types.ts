@@ -66,5 +66,6 @@ export type LeafletDrawingAction =
   | { type: 'FINISH_DRAWING' }
   | { type: 'CANCEL_DRAWING' }
   | { type: 'LOAD_DATA'; payload: Partial<LeafletDrawingState> | null }
+  | { type: 'IMPORT_COURSE'; payload: { name?: string; holes: CourseHole[] } }
   | { type: 'UNDO' }
   | { type: 'REDO' };

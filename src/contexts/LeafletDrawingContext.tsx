@@ -422,6 +422,23 @@ const leafletDrawingReducer = (state: LeafletDrawingState, action: LeafletDrawin
         return { ...state, ...next, past: [...state.past, present], future: newFuture };
     }
 
+    case 'IMPORT_COURSE': {
+      const { name, holes } = action.payload;
+      const newState = {
+        ...state,
+        name: name || state.name,
+        holes: holes.map(h => ({
+          ...h,
+          elements: h.elements.map(el => ({
+            ...el,
+            id: el.id || `${el.type}_${Date.now()}_${Math.random()}`,
+          }))
+        })),
+        currentHole: holes[0]?.number || 1,
+      };
+      return pushHistory(newState, snapshot(newState));
+    }
+
     default:
       return state;
   }

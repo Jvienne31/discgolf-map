@@ -85,38 +85,14 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const theme = React.useMemo(() => {
     const palette = colorPalettes[colorPalette][mode];
     
-    // Calculer les variations de couleurs
-    const lighten = (color: string, amount: number) => {
-      // Fonction simple pour éclaircir une couleur
-      return color;
-    };
-    
-    const darken = (color: string, amount: number) => {
-      // Fonction simple pour assombrir une couleur
-      return color;
-    };
-    
     return createTheme({
       palette: {
         mode,
         primary: {
           main: palette.primary,
-          light: mode === 'dark' ? palette.secondary : palette.primary,
-          dark: mode === 'dark' ? palette.primary : palette.secondary,
-          contrastText: '#fff',
         },
         secondary: {
           main: palette.secondary,
-          light: palette.secondary,
-          dark: palette.primary,
-          contrastText: '#fff',
-        },
-        background: mode === 'dark' ? {
-          default: '#121212',
-          paper: '#1e1e1e',
-        } : {
-          default: '#fafafa',
-          paper: '#fff',
         },
       },
       components: {
