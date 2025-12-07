@@ -1,5 +1,5 @@
 
-import { Box, Button, Typography, List, ListItem, ListItemButton, Paper, Divider, TextField, ListItemText, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert } from '@mui/material';
+import { Box, Button, Typography, List, ListItem, ListItemButton, Paper, Divider, TextField, ListItemText, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert, useTheme } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import AlbumIcon from '@mui/icons-material/Album';
@@ -27,6 +27,7 @@ interface StartupScreenProps {
 }
 
 const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChange }: StartupScreenProps) => {
+  const theme = useTheme();
   const [newCourseName, setNewCourseName] = useState('');
   const { user, logout, isAdmin } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -38,6 +39,10 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
   const [newName, setNewName] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  const gradientColors = theme.palette.mode === 'dark'
+    ? `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 50%, ${theme.palette.secondary.main} 100%)`
+    : `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.light} 50%, ${theme.palette.secondary.light} 100%)`;
 
   const handleCreate = () => {
     if (newCourseName.trim()) {
@@ -97,7 +102,7 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
     <Box 
       sx={{ 
         minHeight: '100vh', 
-        background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 50%, #4caf50 100%)',
+        background: gradientColors,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',

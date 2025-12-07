@@ -76,6 +76,41 @@ const DrawingHandler = () => {
   return null;
 };
 
+const AutoZoomOnElements = () => {
+  const map = useMap();
+  const { state } = useLeafletDrawing();
+  const [hasZoomed, setHasZoomed] = useState(false);
+
+  useEffect(() => {
+    if (!map || hasZoomed) return;
+
+    // Récupérer tous les éléments avec des positions
+    const allElements = state.holes.flatMap(h => h.elements);
+    const positions: L.LatLngExpression[] = [];
+
+    allElements.forEach(el => {
+      if (el.position) {
+        positions.push([el.position.lat, el.position.lng]);
+      }
+      if (el.path && el.path.length > 0) {
+        el.path.forEach(p => positions.push([p.lat, p.lng]));
+      }
+    });
+
+    // Si on a des positions, faire un zoom dessus
+    if (positions.length > 0) {
+      const bounds = L.latLngBounds(positions);
+      map.fitBounds(bounds, {
+        padding: [50, 50],
+        maxZoom: 17
+      });
+      setHasZoomed(true);
+    }
+  }, [map, state.holes, hasZoomed]);
+
+  return null;
+};
+
 const MapUpdater = ({ currentLayer, setMapReady, containerRef }: { currentLayer: BaseLayerKey, setMapReady: (ready: boolean) => void, containerRef: RefObject<HTMLElement> }) => {
   const map = useMap();
   const { dispatch } = useLeafletDrawing();
@@ -335,6 +370,7 @@ const DiagnosticMapComponent = () => {
         doubleClickZoom={false}
       >
         <MapUpdater currentLayer={currentLayer} setMapReady={setMapReady} containerRef={mapContainerRef} />
+        <AutoZoomOnElements />
         <DrawingHandler />
         <ElementLayer />
         <TemporaryPath/>

@@ -7,12 +7,14 @@ import {
   Button, 
   Typography, 
   Alert,
-  CircularProgress
+  CircularProgress,
+  useTheme
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 
 const LoginPage = () => {
   const { login } = useAuth();
+  const theme = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -32,11 +34,15 @@ const LoginPage = () => {
     }
   };
 
+  const gradientColors = theme.palette.mode === 'dark'
+    ? `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 50%, ${theme.palette.secondary.main} 100%)`
+    : `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.light} 50%, ${theme.palette.secondary.light} 100%)`;
+
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 50%, #4caf50 100%)',
+        background: gradientColors,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -122,18 +128,9 @@ const LoginPage = () => {
             </Button>
           </form>
 
-          <Box sx={{ mt: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-              <strong>Utilisateurs autorisés :</strong>
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              • Jvienne31 (Administrateur)
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              • SpaceDisc
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              • LBsport
+          <Box sx={{ mt: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              Outil en cours de test. Accès limité
             </Typography>
           </Box>
         </Paper>

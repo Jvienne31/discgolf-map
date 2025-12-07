@@ -10,9 +10,19 @@ import {
   Box,
   Typography,
   Divider,
-  CircularProgress
+  CircularProgress,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../contexts/AuthContext';
+import { useThemeMode, colorPalettes } from '../contexts/ThemeContext';
 
 interface ProfileDialogProps {
   open: boolean;
@@ -21,6 +31,7 @@ interface ProfileDialogProps {
 
 const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
   const { user } = useAuth();
+  const { mode, colorPalette, toggleMode, setColorPalette } = useThemeMode();
   const [email, setEmail] = useState(user?.email || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -114,6 +125,69 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
       <DialogContent>
         {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+        {/* Section Apparence */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom>Apparence</Typography>
+          
+          {/* Mode Clair/Sombre */}
+          <Box sx={{ mb: 2 }}>
+            <FormLabel component="legend">Mode d'affichage</FormLabel>
+            <ToggleButtonGroup
+              value={mode}
+              exclusive
+              onChange={toggleMode}
+              aria-label="mode d'affichage"
+              fullWidth
+              sx={{ mt: 1 }}
+            >
+              <ToggleButton value="light" aria-label="mode clair">
+                <LightModeIcon sx={{ mr: 1 }} />
+                Clair
+              </ToggleButton>
+              <ToggleButton value="dark" aria-label="mode sombre">
+                <DarkModeIcon sx={{ mr: 1 }} />
+                Sombre
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          {/* Palette de couleurs */}
+          <Box>
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Palette de couleurs</FormLabel>
+              <RadioGroup
+                value={colorPalette}
+                onChange={(e) => setColorPalette(e.target.value as keyof typeof colorPalettes)}
+              >
+                {Object.entries(colorPalettes).map(([key, palette]) => (
+                  <FormControlLabel
+                    key={key}
+                    value={key}
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box
+                          sx={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            backgroundColor: palette[mode].primary,
+                            border: '2px solid',
+                            borderColor: 'divider'
+                          }}
+                        />
+                        {palette.name}
+                      </Box>
+                    }
+                  />
+                ))}
+              </RadioGroup>
+            </FormControl>
+          </Box>
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
 
         {/* Section Email */}
         <Box sx={{ mb: 3 }}>

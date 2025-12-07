@@ -8,6 +8,7 @@ import { LeafletDrawingProvider } from './contexts/LeafletDrawingContext';
 import StartupScreen, { CourseListItem } from './components/StartupScreen';
 import { apiService } from './services/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import LoginPage from './components/LoginPage';
 
 const drawerWidth = 300;
@@ -142,9 +143,9 @@ const AppContent = () => {
       <Box sx={{ display: 'flex', height: '100vh' }}>
         <AppBar
           position="fixed"
+          color="primary"
           sx={{
             zIndex: (theme) => theme.zIndex.drawer + (isMobile ? 0 : 1),
-            backgroundColor: '#2e7d32',
           }}
         >
           <Toolbar>
@@ -210,9 +211,11 @@ const AppContent = () => {
 
 const App = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
