@@ -1,1 +1,17 @@
 node_modules
+
+# Variables d'environnement - NE JAMAIS COMMITTER
+.env
+server/.env
+
+# Base de données locale
+server/courses.db
+server/courses.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

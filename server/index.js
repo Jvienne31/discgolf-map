@@ -7,14 +7,23 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
+import dotenv from 'dotenv';
+
+// Charger les variables d'environnement
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = 3001;
-const JWT_SECRET = 'your-secret-key-change-in-production-' + Date.now();
-const SESSION_SECRET = 'session-secret-change-in-production-' + Date.now();
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'fallback-session-secret-change-me';
+
+// Vérifier que les secrets sont configurés
+if (JWT_SECRET === 'fallback-secret-change-me' || SESSION_SECRET === 'fallback-session-secret-change-me') {
+  console.warn('⚠️  ATTENTION: Utilisez un fichier .env avec des secrets sécurisés en production!');
+}
 
 // Middleware
 app.use(cors({
@@ -58,12 +67,24 @@ db.exec(`
   );
 `);
 
-// Initialiser les utilisateurs par défaut
+// Initialiser les utilisateurs par défaut depuis les variables d'environnement
 const initUsers = () => {
   const users = [
-    { username: 'Jvienne31', password: 'admin123', role: 'admin' },
-    { username: 'SpaceDisc', password: 'user123', role: 'user' },
-    { username: 'LBsport', password: 'user123', role: 'user' }
+    { 
+      username: process.env.DEFAULT_ADMIN_USERNAME || 'admin', 
+      password: process.env.DEFAULT_ADMIN_PASSWORD || 'changeme123', 
+      role: 'admin' 
+    },
+    { 
+      username: process.env.DEFAULT_USER1_USERNAME || 'user1', 
+      password: process.env.DEFAULT_USER1_PASSWORD || 'changeme123', 
+      role: 'user' 
+    },
+    { 
+      username: process.env.DEFAULT_USER2_USERNAME || 'user2', 
+      password: process.env.DEFAULT_USER2_PASSWORD || 'changeme123', 
+      role: 'user' 
+    }
   ];
 
   const existingUsers = db.prepare('SELECT COUNT(*) as count FROM users').get();
@@ -77,6 +98,8 @@ const initUsers = () => {
       insertUser.run(user.username, hashedPassword, user.role);
       console.log(`   ✅ Utilisateur créé: ${user.username} (${user.role})`);
     });
+    
+    console.log('⚠️  IMPORTANT: Changez les mots de passe par défaut après la première connexion!');
   }
 };
 
