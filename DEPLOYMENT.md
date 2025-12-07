@@ -2,30 +2,29 @@
 
 ## 🎯 Architecture d'hébergement gratuit
 
-**Backend** : Render.com (API + SQLite)  
+**Backend** : Railway.app (API + SQLite)  
 **Frontend** : Vercel ou Netlify (React)
 
 ---
 
-## 📦 ÉTAPE 1 : Déployer le Backend sur Render.com
+## 📦 ÉTAPE 1 : Déployer le Backend sur Railway.app
 
-### 1.1 Créer un compte Render.com
-1. Allez sur https://render.com
-2. Inscrivez-vous avec votre compte GitHub
-3. Connectez votre repository `discgolf-map`
+### 1.1 Créer un compte Railway.app
+1. Allez sur https://railway.app
+2. Cliquez **"Login"** → **"Login with GitHub"**
+3. Autorisez Railway à accéder à votre compte GitHub
+4. ✅ **Aucune carte bancaire requise** pour les 5$ gratuits !
 
-### 1.2 Créer un nouveau Web Service
-1. Dans le dashboard Render, cliquez **"New +"** → **"Web Service"**
-2. Sélectionnez le repository `Jvienne31/discgolf-map`
-3. Configurez :
-   - **Name** : `discgolf-api`
-   - **Runtime** : `Node`
-   - **Build Command** : `cd server && npm install`
-   - **Start Command** : `cd server && npm start`
-   - **Plan** : `Free` (750h/mois)
+### 1.2 Créer un nouveau projet
+1. Dans le dashboard Railway, cliquez **"New Project"**
+2. Sélectionnez **"Deploy from GitHub repo"**
+3. Choisissez le repository `Jvienne31/discgolf-map`
+4. Railway détectera automatiquement Node.js
 
 ### 1.3 Configurer les variables d'environnement
-Dans l'onglet **"Environment"**, ajoutez ces variables :
+1. Cliquez sur votre service déployé
+2. Allez dans l'onglet **"Variables"**
+3. Cliquez **"New Variable"** et ajoutez ces variables **UNE PAR UNE** :
 
 ```
 NODE_ENV=production
@@ -37,23 +36,29 @@ DEFAULT_USER1_USERNAME=SpaceDisc
 DEFAULT_USER1_PASSWORD=AutreMotDePasseSecurise456!
 DEFAULT_USER2_USERNAME=LBsport
 DEFAULT_USER2_PASSWORD=EncoreUnAutreMotDePasse789!
+PORT=3001
 ```
 
 ⚠️ **IMPORTANT** : Changez les mots de passe par défaut !
 
-### 1.4 Ajouter un disque persistant
-1. Dans l'onglet **"Disks"**, cliquez **"Add Disk"**
-2. Configurez :
-   - **Name** : `discgolf-db`
-   - **Mount Path** : `/opt/render/project/src/server`
-   - **Size** : `1 GB` (gratuit)
+### 1.4 Configurer un domaine public
+1. Dans l'onglet **"Settings"**
+2. Section **"Networking"** → **"Public Networking"**
+3. Cliquez **"Generate Domain"**
+4. Railway va créer une URL type : `https://discgolf-api.up.railway.app`
+5. ✅ Notez cette URL pour l'étape suivante !
 
-Cela permet de conserver la base de données SQLite entre les redémarrages.
+### 1.5 Vérifier le stockage persistant
+✅ Railway **persiste automatiquement** les fichiers dans le système de fichiers !
+- Votre base SQLite `courses.db` sera conservée entre les redémarrages
+- Pas besoin de configurer un volume supplémentaire
+- Le stockage est **illimité** sur Railway
 
-### 1.5 Déployer
-1. Cliquez **"Create Web Service"**
+### 1.6 Déployer
+1. Railway déploie **automatiquement** dès que vous pushez sur GitHub
 2. Attendez 2-3 minutes que le déploiement se termine
-3. Notez l'URL de votre API : `https://discgolf-api.onrender.com`
+3. Vérifiez les logs dans l'onglet **"Deployments"**
+4. Testez votre API : `https://votre-app.up.railway.app/api/health`
 
 ---
 
@@ -75,8 +80,9 @@ Cela permet de conserver la base de données SQLite entre les redémarrages.
 ### 2.3 Configurer l'API URL
 Dans **"Environment Variables"**, ajoutez :
 ```
-VITE_API_URL=https://discgolf-api.onrender.com
+VITE_API_URL=https://votre-app.up.railway.app
 ```
+(Remplacez par l'URL générée par Railway à l'étape 1.4)
 
 ### 2.4 Déployer
 1. Cliquez **"Deploy"**
@@ -96,8 +102,9 @@ VITE_API_URL=https://discgolf-api.onrender.com
    - **Publish directory** : `dist`
 5. Environment variables :
    ```
-   VITE_API_URL=https://discgolf-api.onrender.com
+   VITE_API_URL=https://votre-app.up.railway.app
    ```
+   (Remplacez par l'URL générée par Railway)
 
 ### Option B : Via Netlify CLI
 ```bash
@@ -125,11 +132,13 @@ Puis dans vos appels API, utilisez `API_URL` au lieu de `http://localhost:3001`.
 
 ## ⚠️ Limitations du plan gratuit
 
-### Render.com
-- ✅ 750h/mois (suffisant pour 1 projet)
-- ⚠️ Le service "dort" après 15 min d'inactivité
-- ⚠️ Redémarre en ~30 secondes à la première requête
-- ✅ 1 GB de stockage disque gratuit
+### Railway.app
+- ✅ **5$ de crédit gratuit par mois** (pas de carte bancaire requise)
+- ✅ **~500h d'exécution** ou ~20 jours complets
+- ✅ **Stockage illimité** pour SQLite
+- ✅ **Pas de mise en veille** contrairement à Render
+- ✅ **Données persistantes** entre les redémarrages
+- 💡 Coût réel : ~3-4$/mois pour usage typique (largement dans les 5$ gratuits)
 
 ### Vercel
 - ✅ Bande passante illimitée
@@ -147,8 +156,10 @@ Puis dans vos appels API, utilisez `API_URL` au lieu de `http://localhost:3001`.
 ## 🚀 Automatisation : Déploiement continu
 
 Une fois configuré, chaque `git push` déclenchera automatiquement :
-1. **Render** : Reconstruction et redéploiement du backend
-2. **Vercel/Netlify** : Reconstruction et redéploiement du frontend
+1. **Railway** : Reconstruction et redéploiement du backend (en ~2 min)
+2. **Vercel/Netlify** : Reconstruction et redéploiement du frontend (en ~1 min)
+
+✅ Déploiement entièrement automatisé sans configuration supplémentaire !
 
 ---
 
@@ -164,23 +175,32 @@ Une fois configuré, chaque `git push` déclenchera automatiquement :
 
 ## 🆘 Dépannage
 
-### Le backend ne démarre pas sur Render
-- Vérifiez les logs dans l'onglet "Logs"
-- Assurez-vous que toutes les variables d'environnement sont définies
-- Vérifiez que le disque est bien monté
+### Le backend ne démarre pas sur Railway
+- Vérifiez les logs dans l'onglet **"Deployments"** → Cliquez sur le dernier déploiement
+- Assurez-vous que toutes les variables d'environnement sont définies dans l'onglet **"Variables"**
+- Vérifiez que le port 3001 est bien défini dans les variables
+- Railway détecte automatiquement Node.js, pas besoin de configuration build
 
 ### Le frontend ne peut pas contacter l'API
-- Vérifiez que `VITE_API_URL` est bien configuré
-- Vérifiez les logs CORS dans la console du navigateur
-- Testez l'API directement : `https://discgolf-api.onrender.com/api/health`
+- Vérifiez que `VITE_API_URL` pointe vers votre domaine Railway (ex: `https://xxx.up.railway.app`)
+- Vérifiez que CORS est bien configuré dans `server/index.js` (déjà fait ✅)
+- Testez l'API directement : `https://votre-app.up.railway.app/api/health`
+- Regardez les logs dans la console du navigateur (F12)
 
-### La base de données est réinitialisée
-- Vérifiez que le disque persistant est bien configuré sur Render
-- Le path doit être `/opt/render/project/src/server`
+### La base de données semble vide après redémarrage
+- ✅ Railway persiste automatiquement le système de fichiers
+- La base SQLite `courses.db` devrait être conservée
+- Si problème : Vérifiez les logs pour voir si le fichier est créé au bon endroit
+- Le fichier doit être dans `server/courses.db`
+
+### L'application consomme trop de crédits Railway
+- Vérifiez le temps d'exécution dans **"Metrics"**
+- Si vous dépassez 5$/mois, Railway facture automatiquement (0.000231$/h)
+- Solution : Réduire le nombre de requêtes ou optimiser le code
 
 ---
 
 Besoin d'aide ? Consultez la documentation :
-- Render : https://render.com/docs
+- Railway : https://docs.railway.app
 - Vercel : https://vercel.com/docs
 - Netlify : https://docs.netlify.com
