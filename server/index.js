@@ -113,7 +113,11 @@ initUsers();
 
 // Middleware d'authentification
 const authenticateToken = (req, res, next) => {
-  const token = req.session.token;
+  // Essayer d'abord le header Authorization, puis la session
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.startsWith('Bearer ') 
+    ? authHeader.substring(7) 
+    : req.session.token;
   
   if (!token) {
     return res.status(401).json({ error: 'Non authentifié' });
