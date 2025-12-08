@@ -506,3 +506,6 @@ export const useLeafletDrawing = () => {
   }
   return context;
 };
+
+// Re-export types for convenience
+export type { CourseElement, CourseHole, Position } from './types';

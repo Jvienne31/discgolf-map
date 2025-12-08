@@ -104,6 +104,11 @@ declare module '@turf/turf' {
     options?: BezierSplineOptions
   ): Feature<LineString, P>;
 
+  export function length<G extends LineString | MultiLineString>(
+    geojson: Feature<G> | G,
+    options?: { units?: 'meters' | 'kilometers' | 'miles' }
+  ): number;
+
   // Add more function declarations as needed
 
 }

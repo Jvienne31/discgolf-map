@@ -1,6 +1,6 @@
 
 import { Box, Button, Typography, List, ListItem, ListItemButton, Paper, Divider, TextField, ListItemText, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert, useTheme } from '@mui/material';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import AlbumIcon from '@mui/icons-material/Album';
 import PersonIcon from '@mui/icons-material/Person';
