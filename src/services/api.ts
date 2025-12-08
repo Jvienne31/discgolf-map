@@ -1,4 +1,5 @@
 // Service API pour communiquer avec le backend
+// Utilise VITE_API_URL défini dans les variables d'environnement Vercel
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
