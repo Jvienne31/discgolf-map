@@ -25,6 +25,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://discgolf-api-production.up.railway.app';
+
 interface User {
   id: number;
   username: string;
@@ -61,8 +63,10 @@ const AdminUsersDialog: React.FC<AdminUsersDialogProps> = ({ open, onClose }) =>
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('/api/admin/users', {
-        credentials: 'include'
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+        credentials: 'include',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
       
       if (!response.ok) {
@@ -82,9 +86,13 @@ const AdminUsersDialog: React.FC<AdminUsersDialogProps> = ({ open, onClose }) =>
     if (!selectedUser || !newPassword) return;
 
     try {
-      const response = await fetch(`/api/admin/users/${selectedUser.id}/reset-password`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/${selectedUser.id}/reset-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         credentials: 'include',
         body: JSON.stringify({ newPassword }),
       });
@@ -106,8 +114,10 @@ const AdminUsersDialog: React.FC<AdminUsersDialogProps> = ({ open, onClose }) =>
 
   const handleViewPassword = async (user: User) => {
     try {
-      const response = await fetch(`/api/admin/users/${user.id}/password`, {
-        credentials: 'include'
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/${user.id}/password`, {
+        credentials: 'include',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
 
       if (!response.ok) {
