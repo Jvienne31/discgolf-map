@@ -111,41 +111,60 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
       }}
     >
       {/* Header avec info utilisateur */}
-      <Box sx={{ position: 'absolute', top: 20, right: 20, display: 'flex', gap: 1, alignItems: 'center' }}>
+      <Box sx={{ 
+        position: 'absolute', 
+        top: { xs: 10, sm: 20 }, 
+        right: { xs: 10, sm: 20 },
+        left: { xs: 10, sm: 'auto' },
+        display: 'flex', 
+        gap: { xs: 0.5, sm: 1 }, 
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end'
+      }}>
         <Chip 
           icon={<PersonIcon />}
           label={user?.username}
           color={isAdmin ? 'error' : 'primary'}
           variant="filled"
+          size="small"
+          sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' } }}
         />
         <IconButton
           onClick={() => setProfileOpen(true)}
           sx={{ 
             color: 'white',
+            padding: { xs: 0.5, sm: 1 },
             '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
           }}
           title="Mon profil"
+          size="small"
         >
-          <SettingsIcon />
+          <SettingsIcon fontSize="small" />
         </IconButton>
         {isAdmin && (
           <IconButton
             onClick={() => setAdminUsersOpen(true)}
             sx={{ 
               color: 'white',
+              padding: { xs: 0.5, sm: 1 },
               '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
             }}
             title="Gestion des utilisateurs"
+            size="small"
           >
-            <SupervisorAccountIcon />
+            <SupervisorAccountIcon fontSize="small" />
           </IconButton>
         )}
         <Button 
           variant="outlined" 
           onClick={logout}
+          size="small"
           sx={{ 
             color: 'white', 
             borderColor: 'white',
+            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+            px: { xs: 1.5, sm: 2 },
             '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.1)' }
           }}
         >
@@ -217,23 +236,38 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
         }}
       >
         {/* En-tête avec logo */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
+        <Box sx={{ textAlign: 'center', mb: { xs: 2, sm: 4 }, mt: { xs: 6, sm: 0 } }}>
           <Box 
             component="img"
             src="/enjoy-disc-golf-logo.png"
             alt="Enjoy Disc Golf"
             sx={{ 
-              width: 150, 
-              height: 150, 
+              width: { xs: 100, sm: 150 }, 
+              height: { xs: 100, sm: 150 }, 
               mb: 2,
               display: 'block',
               margin: '0 auto'
             }}
           />
-          <Typography variant="h3" gutterBottom sx={{ fontWeight: 'bold', color: '#1b5e20' }}>
+          <Typography 
+            variant="h3" 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 'bold', 
+              color: '#1b5e20',
+              fontSize: { xs: '1.75rem', sm: '3rem' }
+            }}
+          >
             DiscGolf Mapper
           </Typography>
-          <Typography variant="h6" sx={{ color: 'text.secondary', mb: 1 }}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              color: 'text.secondary', 
+              mb: 1,
+              fontSize: { xs: '1rem', sm: '1.25rem' }
+            }}
+          >
             Gérez vos parcours de disc golf
           </Typography>
           {isAdmin && (
@@ -252,7 +286,7 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
           </Typography>
         </Divider>
         
-        <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, mb: 4 }}>
           <TextField
             fullWidth
             label="Nom du nouveau parcours"
@@ -261,14 +295,18 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
             onChange={(e) => setNewCourseName(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
             placeholder="Ex: Parc de la Vallée"
+            size="small"
+            sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
           />
           <Button
             variant="contained"
             onClick={handleCreate}
             disabled={!newCourseName.trim()}
+            fullWidth={true}
             sx={{ 
               whiteSpace: 'nowrap',
-              px: 4,
+              px: { xs: 2, sm: 4 },
+              minWidth: { sm: 'auto' },
               bgcolor: '#2e7d32',
               '&:hover': { bgcolor: '#1b5e20' }
             }}
@@ -303,15 +341,16 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
                   }
                 }}
                 secondaryAction={
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: { xs: 0.5, sm: 1 } }}>
                     <IconButton
                       edge="end"
                       aria-label="modifier"
                       onClick={(e) => handleRenameClick(course, e)}
                       size="small"
                       title="Modifier le nom"
+                      sx={{ padding: { xs: '4px', sm: '8px' } }}
                     >
-                      <EditIcon />
+                      <EditIcon fontSize="small" />
                     </IconButton>
                     <IconButton
                       edge="end"
@@ -319,14 +358,14 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
                       onClick={(e) => handleDeleteClick(course, e)}
                       size="small"
                       title="Supprimer le parcours"
-                      sx={{ color: 'error.main' }}
+                      sx={{ color: 'error.main', padding: { xs: '4px', sm: '8px' } }}
                     >
-                      <DeleteIcon />
+                      <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Box>
                 }
               >
-                <ListItemButton onClick={() => onSelectCourse(course.id)} sx={{ pr: 10 }}>
+                <ListItemButton onClick={() => onSelectCourse(course.id)} sx={{ pr: { xs: 8, sm: 10 } }}>
                   <ListItemText 
                     primary={course.name}
                     secondary={
@@ -340,7 +379,13 @@ const StartupScreen = ({ courses, onSelectCourse, onCreateCourse, onCoursesChang
                         )}
                       </>
                     }
-                    primaryTypographyProps={{ fontWeight: 500 }}
+                    primaryTypographyProps={{ 
+                      fontWeight: 500,
+                      fontSize: { xs: '0.9rem', sm: '1rem' }
+                    }}
+                    secondaryTypographyProps={{
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                    }}
                   />
                 </ListItemButton>
               </ListItem>
