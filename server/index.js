@@ -209,6 +209,7 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 // POST /api/auth/change-password - Changer son mot de passe
 app.post('/api/auth/change-password', authenticateToken, (req, res) => {
   try {
+    console.log('Change password request from user:', req.user);
     const { currentPassword, newPassword } = req.body;
     
     if (!currentPassword || !newPassword) {
@@ -220,6 +221,11 @@ app.post('/api/auth/change-password', authenticateToken, (req, res) => {
     }
     
     const user = db.prepare('SELECT password FROM users WHERE id = ?').get(req.user.id);
+    
+    if (!user) {
+      console.error('User not found with id:', req.user.id);
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
     
     const validPassword = bcrypt.compareSync(currentPassword, user.password);
     
