@@ -24,6 +24,8 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useAuth } from '../contexts/AuthContext';
 import { useThemeMode, colorPalettes } from '../contexts/ThemeContext';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://discgolf-api-production.up.railway.app';
+
 interface ProfileDialogProps {
   open: boolean;
   onClose: () => void;
@@ -46,9 +48,13 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/update-email', {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/auth/update-email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         credentials: 'include',
         body: JSON.stringify({ email }),
       });
@@ -89,9 +95,13 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/change-password', {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         credentials: 'include',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
