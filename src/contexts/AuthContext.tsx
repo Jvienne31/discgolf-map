@@ -74,6 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     const data = await response.json();
+    localStorage.setItem('token', data.token);
     setUser(data.user);
   };
 
@@ -86,6 +87,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
     } finally {
+      localStorage.removeItem('token');
       setUser(null);
     }
   };
