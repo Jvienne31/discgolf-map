@@ -8,7 +8,7 @@ import {
   Clear,
   TouchApp
 } from '@mui/icons-material';
-import { useLeafletDrawing, CourseElement, getElementIcon } from '../contexts/LeafletDrawingContext';
+import { useLeafletDrawing, CourseElement } from '../contexts/LeafletDrawingContext';
 
 const LeafletDrawingToolbar = () => {
   const { state, dispatch } = useLeafletDrawing();
@@ -142,7 +142,7 @@ const LeafletDrawingToolbar = () => {
             🎨 Dessin en cours...
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>
-            Mode: {getElementIcon(state.drawingMode!)} {state.drawingMode}
+            Mode: {state.drawingMode}
           </Typography>
           <Button
             onClick={cancelDrawing}
@@ -169,7 +169,7 @@ const LeafletDrawingToolbar = () => {
           }}
         >
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            {getElementIcon(state.drawingMode)} Mode: {state.drawingMode}
+            Mode: {state.drawingMode}
           </Typography>
           <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
             {state.drawingMode === 'tee' || state.drawingMode === 'basket' ? 

@@ -101,7 +101,7 @@ declare module '@turf/turf' {
 
   export function bezierSpline<P = GeoJsonProperties>(
     line: Feature<LineString, P> | LineString,
-    options?: BezierSplineOptions
+    options?: BezierSplineOptions & { sharpness?: number }
   ): Feature<LineString, P>;
 
   export function length<G extends LineString | MultiLineString>(
