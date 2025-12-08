@@ -13,7 +13,7 @@ import {
   Straighten
 } from '@mui/icons-material';
 import { useLeafletDrawing, CourseElement, serializeState } from '../contexts/LeafletDrawingContext';
-import * as turf from '@turf/turf';
+import { lineString, bezierSpline, length } from '@turf/turf';
 import generateKMLContent from '../utils/kml';
 
 
@@ -251,9 +251,9 @@ const DrawingToolsSidebar = () => {
     const flightPath = currentHoleData.elements.find(el => el.type === 'flight-path' && el.path && el.path.length >= 2);
     let distance = null;
     if (flightPath) {
-        const line = turf.lineString(flightPath.path.map(p => [p.lng, p.lat]));
-        const curved = turf.bezierSpline(line);
-        distance = turf.length(curved, { units: 'meters' });
+        const line = lineString(flightPath.path.map(p => [p.lng, p.lat]));
+        const curved = bezierSpline(line);
+        distance = length(curved, { units: 'meters' });
     }
 
     return { holeElementSummary: summary, flightPathDistance: distance };

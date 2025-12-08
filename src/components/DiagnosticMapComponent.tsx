@@ -8,7 +8,7 @@ import { layerConfigs, layerNames, BaseLayerKey, getElementColor, getPathOptions
 import MeasurementLayer from './MeasurementLayer';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import * as turf from '@turf/turf';
+import { lineString, bezierSpline } from '@turf/turf';
 
 // --- Helper Functions ---
 
@@ -214,8 +214,8 @@ const ElementLayer = () => {
           if (el.type === 'flight-path') {
             let positions = el.path.map(p => [p.lat, p.lng] as [number, number]);
             if (el.path.length >= 2) {
-                const line = turf.lineString(el.path.map(p => [p.lng, p.lat]));
-                const curved = turf.bezierSpline(line, { resolution: 10000, sharpness: 0.85 });
+                const line = lineString(el.path.map(p => [p.lng, p.lat]));
+                const curved = bezierSpline(line, { resolution: 10000, sharpness: 0.85 });
                 positions = curved.geometry.coordinates.map(c => [c[1], c[0]] as [number, number]);
             }
             return <Polyline key={el.id} positions={positions} pathOptions={{...pathOptions, ...highlightOptions}} eventHandlers={eventHandlers(el)} />;

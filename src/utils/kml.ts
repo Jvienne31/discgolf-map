@@ -1,6 +1,6 @@
 import { CourseHole, CourseElement } from '../contexts/types';
 import * as L from 'leaflet';
-import * as turf from '@turf/turf';
+import { lineString, bezierSpline } from '@turf/turf';
 
 const generateKMLContent = (courseName: string, holes: CourseHole[]): string => {
   const placemarks = holes
@@ -115,8 +115,8 @@ const createPolygonPlacemark = (name: string, path: L.LatLngLiteral[], styleUrl:
 };
 
 const createFlightPathPlacemark = (name: string, styleUrl: string, path: L.LatLngLiteral[]): string => {
-    const line = turf.lineString(path.map((p: L.LatLngLiteral) => [p.lng, p.lat]));
-    const curved = turf.bezierSpline(line, { resolution: 5000 });
+    const line = lineString(path.map((p: L.LatLngLiteral) => [p.lng, p.lat]));
+    const curved = bezierSpline(line, { resolution: 5000 });
     const coordinates = curved.geometry.coordinates.map(p => `${p[0]},${p[1]},0`).join(' ');
     return `
     <Placemark>
