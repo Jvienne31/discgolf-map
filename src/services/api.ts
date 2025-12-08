@@ -24,7 +24,7 @@ class ApiService {
   // Récupérer tous les parcours
   async getCourses(): Promise<CourseListItem[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/courses`, {
+      const response = await fetch(`${API_BASE_URL}/api/courses`, {
         credentials: 'include'
       });
       if (!response.ok) {
@@ -40,7 +40,7 @@ class ApiService {
   // Récupérer un parcours spécifique
   async getCourse(id: string): Promise<CourseData> {
     try {
-      const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/courses/${id}`, {
         credentials: 'include'
       });
       if (!response.ok) {
@@ -56,7 +56,7 @@ class ApiService {
   // Créer un nouveau parcours
   async createCourse(courseData: CourseData): Promise<{ id: string; name: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/courses`, {
+      const response = await fetch(`${API_BASE_URL}/api/courses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,9 +75,9 @@ class ApiService {
   }
 
   // Mettre à jour un parcours
-  async updateCourse(id: string, courseData: Partial<CourseData>): Promise<{ id: string; name: string }> {
+  async updateCourse(id: string, courseData: CourseData): Promise<{ id: string; name: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/courses/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +98,7 @@ class ApiService {
   // Supprimer un parcours
   async deleteCourse(id: string): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/courses/${id}`, {
         method: 'DELETE',
         credentials: 'include'
       });
