@@ -93,20 +93,21 @@ const initUsers = () => {
     }
   ];
 
-  const existingUsers = db.prepare('SELECT COUNT(*) as count FROM users').get();
+  console.log('🔐 Vérification des utilisateurs par défaut...');
+  const checkUser = db.prepare('SELECT id FROM users WHERE username = ?');
+  const insertUser = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
   
-  if (existingUsers.count === 0) {
-    console.log('🔐 Initialisation des utilisateurs...');
-    const insertUser = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
+  users.forEach(user => {
+    const existingUser = checkUser.get(user.username);
     
-    users.forEach(user => {
+    if (!existingUser) {
       const hashedPassword = bcrypt.hashSync(user.password, 10);
       insertUser.run(user.username, hashedPassword, user.role);
       console.log(`   ✅ Utilisateur créé: ${user.username} (${user.role})`);
-    });
-    
-    console.log('⚠️  IMPORTANT: Changez les mots de passe par défaut après la première connexion!');
-  }
+    } else {
+      console.log(`   ℹ️  Utilisateur existant: ${user.username} (mot de passe préservé)`);
+    }
+  });
 };
 
 initUsers();
