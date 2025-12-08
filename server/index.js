@@ -136,6 +136,15 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'DiscGolf API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Routes d'authentification
 
 // POST /api/auth/login
