@@ -25,6 +25,7 @@ export const useGeolocation = (
     error: null,
     loading: false,
   });
+  const [highAccuracyFailed, setHighAccuracyFailed] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
@@ -35,6 +36,7 @@ export const useGeolocation = (
         error: null,
         loading: false,
       });
+      setHighAccuracyFailed(false);
       return;
     }
 
@@ -49,10 +51,13 @@ export const useGeolocation = (
 
     setState(prev => ({ ...prev, loading: true }));
 
+    // Essayer d'abord avec haute précision, puis fallback si échec
+    const useHighAccuracy = !highAccuracyFailed && (options.enableHighAccuracy ?? true);
+
     const geoOptions: PositionOptions = {
-      enableHighAccuracy: options.enableHighAccuracy ?? true,
-      timeout: options.timeout ?? 30000, // Augmenté à 30 secondes
-      maximumAge: options.maximumAge ?? 0, // Toujours demander une position fraîche
+      enableHighAccuracy: useHighAccuracy,
+      timeout: useHighAccuracy ? 15000 : 10000, // Timeout plus court pour fallback
+      maximumAge: useHighAccuracy ? 5000 : 30000, // Accepter position plus ancienne en fallback
     };
 
     const handleSuccess = (position: GeolocationPosition) => {
@@ -71,22 +76,45 @@ export const useGeolocation = (
       switch (error.code) {
         case error.PERMISSION_DENIED:
           errorMessage = 'Permission de géolocalisation refusée';
+          setState({
+            latitude: null,
+            longitude: null,
+            accuracy: null,
+            error: errorMessage,
+            loading: false,
+          });
           break;
         case error.POSITION_UNAVAILABLE:
           errorMessage = 'Position indisponible';
+          if (!highAccuracyFailed && useHighAccuracy) {
+            console.log('Haute précision échouée, tentative en mode basse précision...');
+            setHighAccuracyFailed(true);
+          } else {
+            setState({
+              latitude: null,
+              longitude: null,
+              accuracy: null,
+              error: errorMessage,
+              loading: false,
+            });
+          }
           break;
         case error.TIMEOUT:
-          errorMessage = 'Délai de géolocalisation dépassé';
+          if (!highAccuracyFailed && useHighAccuracy) {
+            console.log('Timeout haute précision, tentative en mode basse précision...');
+            setHighAccuracyFailed(true);
+          } else {
+            errorMessage = 'Délai de géolocalisation dépassé';
+            setState({
+              latitude: null,
+              longitude: null,
+              accuracy: null,
+              error: errorMessage,
+              loading: false,
+            });
+          }
           break;
       }
-
-      setState({
-        latitude: null,
-        longitude: null,
-        accuracy: null,
-        error: errorMessage,
-        loading: false,
-      });
     };
 
     // Suivi en temps réel
@@ -99,7 +127,7 @@ export const useGeolocation = (
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [enabled, options.enableHighAccuracy, options.timeout, options.maximumAge]);
+  }, [enabled, options.enableHighAccuracy, options.timeout, options.maximumAge, highAccuracyFailed]);
 
   return state;
 };

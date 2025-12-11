@@ -51,6 +51,11 @@ const Sidebar = () => {
         {fieldMode && geoState.error && (
           <Alert severity="error" sx={{ mt: 1, py: 0 }}>
             {geoState.error}
+            {geoState.error.includes('Délai') && (
+              <Typography variant="caption" display="block">
+                💡 Essaie de bouger un peu ou va dans un endroit avec meilleure réception GPS
+              </Typography>
+            )}
           </Alert>
         )}
         
@@ -64,7 +69,12 @@ const Sidebar = () => {
             sx={{ mt: 1, py: 0 }}
           >
             Position trouvée (±{geoState.accuracy?.toFixed(0)}m)
-            {geoState.accuracy && geoState.accuracy > 30 && (
+            {geoState.accuracy && geoState.accuracy > 100 && (
+              <Typography variant="caption" display="block">
+                ⚡ Mode précision réduite activé
+              </Typography>
+            )}
+            {geoState.accuracy && geoState.accuracy > 30 && geoState.accuracy <= 100 && (
               <Typography variant="caption" display="block">
                 💡 Pour une meilleure précision, va en extérieur avec vue dégagée du ciel
               </Typography>
