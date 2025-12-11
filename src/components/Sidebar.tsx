@@ -1,12 +1,13 @@
-import { Box, Divider, Typography, Switch, FormControlLabel, Alert } from '@mui/material';
+import { Box, Divider, Typography, Switch, FormControlLabel, Alert, Button } from '@mui/material';
 import DrawingToolsSidebar from './DrawingToolsSidebar';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
+import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import { useMapContext } from '../contexts/MapContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useEffect } from 'react';
 
 const Sidebar = () => {
-  const { fieldMode, setFieldMode, setUserLocation } = useMapContext();
+  const { fieldMode, setFieldMode, setUserLocation, recenterOnUser } = useMapContext();
   const geoState = useGeolocation(fieldMode);
 
   useEffect(() => {
@@ -60,26 +61,39 @@ const Sidebar = () => {
         )}
         
         {fieldMode && geoState.latitude && geoState.longitude && (
-          <Alert 
-            severity={
-              geoState.accuracy && geoState.accuracy < 10 ? "success" : 
-              geoState.accuracy && geoState.accuracy < 30 ? "info" : 
-              "warning"
-            } 
-            sx={{ mt: 1, py: 0 }}
-          >
-            Position trouvée (±{geoState.accuracy?.toFixed(0)}m)
-            {geoState.accuracy && geoState.accuracy > 100 && (
-              <Typography variant="caption" display="block">
-                ⚡ Mode précision réduite activé
-              </Typography>
-            )}
-            {geoState.accuracy && geoState.accuracy > 30 && geoState.accuracy <= 100 && (
-              <Typography variant="caption" display="block">
-                💡 Pour une meilleure précision, va en extérieur avec vue dégagée du ciel
-              </Typography>
-            )}
-          </Alert>
+          <>
+            <Alert 
+              severity={
+                geoState.accuracy && geoState.accuracy < 10 ? "success" : 
+                geoState.accuracy && geoState.accuracy < 30 ? "info" : 
+                "warning"
+              } 
+              sx={{ mt: 1, py: 0 }}
+            >
+              Position trouvée (±{geoState.accuracy?.toFixed(0)}m)
+              {geoState.accuracy && geoState.accuracy > 100 && (
+                <Typography variant="caption" display="block">
+                  ⚡ Mode précision réduite activé
+                </Typography>
+              )}
+              {geoState.accuracy && geoState.accuracy > 30 && geoState.accuracy <= 100 && (
+                <Typography variant="caption" display="block">
+                  💡 Pour une meilleure précision, va en extérieur avec vue dégagée du ciel
+                </Typography>
+              )}
+            </Alert>
+            
+            <Button
+              fullWidth
+              variant="outlined"
+              size="small"
+              startIcon={<GpsFixedIcon />}
+              onClick={recenterOnUser}
+              sx={{ mt: 1 }}
+            >
+              Recentrer sur ma position
+            </Button>
+          </>
         )}
       </Box>
 

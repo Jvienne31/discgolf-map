@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import React from 'react';
 import { Circle, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useMapContext } from '../contexts/MapContext';
@@ -41,11 +42,20 @@ export const UserLocationMarker = () => {
   const map = useMap();
   const { userLocation, fieldMode } = useMapContext();
   const geoState = useGeolocation(fieldMode);
+  const hasZoomedRef = React.useRef(false);
 
   useEffect(() => {
     if (userLocation && fieldMode) {
-      // Centrer la carte sur la position de l'utilisateur la première fois
-      map.setView([userLocation.lat, userLocation.lng], map.getZoom());
+      // Auto-zoom la première fois qu'on obtient la position
+      if (!hasZoomedRef.current) {
+        map.setView([userLocation.lat, userLocation.lng], 18, { animate: true });
+        hasZoomedRef.current = true;
+      }
+    }
+    
+    // Reset le flag quand on désactive le mode terrain
+    if (!fieldMode) {
+      hasZoomedRef.current = false;
     }
   }, [userLocation, fieldMode, map]);
 
