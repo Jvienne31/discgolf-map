@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Circle, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useMapContext } from '../contexts/MapContext';
+import { useGeolocation } from '../hooks/useGeolocation';
 
 // Icône personnalisée pour la position de l'utilisateur
 const createUserLocationIcon = () => {
@@ -39,6 +40,7 @@ const createUserLocationIcon = () => {
 export const UserLocationMarker = () => {
   const map = useMap();
   const { userLocation, fieldMode } = useMapContext();
+  const geoState = useGeolocation(fieldMode);
 
   useEffect(() => {
     if (userLocation && fieldMode) {
@@ -51,6 +53,9 @@ export const UserLocationMarker = () => {
     return null;
   }
 
+  // Utiliser la précision réelle du GPS (en mètres)
+  const accuracyRadius = geoState.accuracy || 50;
+
   return (
     <>
       {/* Marqueur bleu pour la position */}
@@ -60,13 +65,13 @@ export const UserLocationMarker = () => {
         zIndexOffset={1000}
       />
       
-      {/* Cercle de précision (50m de rayon par exemple) */}
+      {/* Cercle de précision dynamique basé sur l'accuracy GPS */}
       <Circle
         center={[userLocation.lat, userLocation.lng]}
-        radius={50}
+        radius={accuracyRadius}
         pathOptions={{
-          color: '#4285F4',
-          fillColor: '#4285F4',
+          color: accuracyRadius < 10 ? '#34A853' : accuracyRadius < 30 ? '#4285F4' : '#FBBC05',
+          fillColor: accuracyRadius < 10 ? '#34A853' : accuracyRadius < 30 ? '#4285F4' : '#FBBC05',
           fillOpacity: 0.1,
           weight: 2,
           opacity: 0.5,

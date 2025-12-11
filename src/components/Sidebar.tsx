@@ -55,8 +55,20 @@ const Sidebar = () => {
         )}
         
         {fieldMode && geoState.latitude && geoState.longitude && (
-          <Alert severity="success" sx={{ mt: 1, py: 0 }}>
+          <Alert 
+            severity={
+              geoState.accuracy && geoState.accuracy < 10 ? "success" : 
+              geoState.accuracy && geoState.accuracy < 30 ? "info" : 
+              "warning"
+            } 
+            sx={{ mt: 1, py: 0 }}
+          >
             Position trouvée (±{geoState.accuracy?.toFixed(0)}m)
+            {geoState.accuracy && geoState.accuracy > 30 && (
+              <Typography variant="caption" display="block">
+                💡 Pour une meilleure précision, va en extérieur avec vue dégagée du ciel
+              </Typography>
+            )}
           </Alert>
         )}
       </Box>

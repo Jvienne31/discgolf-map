@@ -51,8 +51,8 @@ export const useGeolocation = (
 
     const geoOptions: PositionOptions = {
       enableHighAccuracy: options.enableHighAccuracy ?? true,
-      timeout: options.timeout ?? 10000,
-      maximumAge: options.maximumAge ?? 0,
+      timeout: options.timeout ?? 30000, // Augmenté à 30 secondes
+      maximumAge: options.maximumAge ?? 0, // Toujours demander une position fraîche
     };
 
     const handleSuccess = (position: GeolocationPosition) => {
