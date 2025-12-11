@@ -7,6 +7,10 @@ interface MapContextType {
   setCurrentLayer: (layer: MapLayer) => void;
   zoom: number;
   setZoom: (zoom: number) => void;
+  fieldMode: boolean;
+  setFieldMode: (enabled: boolean) => void;
+  userLocation: { lat: number; lng: number } | null;
+  setUserLocation: (location: { lat: number; lng: number } | null) => void;
 }
 
 const MapContext = createContext<MapContextType | undefined>(undefined);
@@ -26,6 +30,8 @@ interface MapProviderProps {
 export const MapProvider = ({ children }: MapProviderProps) => {
   const [currentLayer, setCurrentLayer] = useState<MapLayer>('osm');
   const [zoom, setZoom] = useState(13);
+  const [fieldMode, setFieldMode] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   return (
     <MapContext.Provider
@@ -34,6 +40,10 @@ export const MapProvider = ({ children }: MapProviderProps) => {
         setCurrentLayer,
         zoom,
         setZoom,
+        fieldMode,
+        setFieldMode,
+        userLocation,
+        setUserLocation,
       }}
     >
       {children}
