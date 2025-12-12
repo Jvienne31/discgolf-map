@@ -1,0 +1,4 @@
+server/courses.db
+server/backups/
+*.db-shm
+*.db-wal

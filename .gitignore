@@ -7,6 +7,9 @@ server/.env
 # Base de données locale
 server/courses.db
 server/courses.db-journal
+server/backups/
+*.db-shm
+*.db-wal
 
 # Logs
 *.log

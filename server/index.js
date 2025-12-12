@@ -56,13 +56,25 @@ app.use(session({
 const dbPath = process.env.DATABASE_PATH || join(__dirname, 'courses.db');
 
 // Créer le répertoire parent si nécessaire
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync, copyFileSync } from 'fs';
 import { dirname as pathDirname } from 'path';
 const dbDir = pathDirname(dbPath);
 try {
   mkdirSync(dbDir, { recursive: true });
 } catch (err) {
   // Le répertoire existe déjà, pas de problème
+}
+
+// PROTECTION: Si on utilise un volume Railway et qu'il est vide, copier la base locale
+const localDbPath = join(__dirname, 'courses.db');
+if (process.env.DATABASE_PATH && !existsSync(dbPath) && existsSync(localDbPath)) {
+  console.log('📋 Volume vide détecté, copie de la base locale vers le volume...');
+  try {
+    copyFileSync(localDbPath, dbPath);
+    console.log('✅ Base de données copiée vers le volume persistant');
+  } catch (err) {
+    console.error('❌ Erreur copie:', err);
+  }
 }
 
 const db = new Database(dbPath);
