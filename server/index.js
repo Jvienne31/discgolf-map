@@ -709,6 +709,41 @@ app.post('/api/capture-map', async (req, res) => {
   }
 });
 
+// ADMIN ENDPOINT - Restaurer la base de données depuis un backup
+app.post('/api/admin/restore-db', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { users, courses } = req.body;
+    
+    if (!users || !courses) {
+      return res.status(400).json({ error: 'Données manquantes (users et courses requis)' });
+    }
+    
+    console.log(`🔄 Restauration: ${users.length} utilisateurs, ${courses.length} parcours`);
+    
+    // Restaurer les utilisateurs (sauf s'ils existent déjà)
+    const insertUser = db.prepare('INSERT OR IGNORE INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)');
+    users.forEach(user => {
+      insertUser.run(user.id, user.username, user.password, user.role, user.created_at);
+    });
+    
+    // Restaurer les parcours
+    const insertCourse = db.prepare('INSERT OR REPLACE INTO courses (id, name, user_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+    courses.forEach(course => {
+      insertCourse.run(course.id, course.name, course.user_id, course.data, course.created_at, course.updated_at);
+    });
+    
+    console.log('✅ Restauration terminée');
+    res.json({ 
+      message: 'Base de données restaurée avec succès',
+      users_restored: users.length,
+      courses_restored: courses.length
+    });
+  } catch (error) {
+    console.error('❌ Erreur restauration:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ADMIN ENDPOINT - Explorer la base de données (temporaire pour diagnostic)
 app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, (req, res) => {
   try {
