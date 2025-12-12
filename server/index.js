@@ -50,7 +50,9 @@ app.use(session({
 }));
 
 // Initialiser la base de données SQLite
-const db = new Database(join(__dirname, 'courses.db'));
+// Utiliser un chemin dans le volume Railway si disponible, sinon local
+const dbPath = process.env.DATABASE_PATH || join(__dirname, 'courses.db');
+const db = new Database(dbPath);
 
 // Créer les tables
 db.exec(`
