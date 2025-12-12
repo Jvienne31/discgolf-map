@@ -2,6 +2,10 @@ import Database from 'better-sqlite3';
 import pg from 'pg';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import dotenv from 'dotenv';
+
+// Charger les variables d'environnement en premier
+dotenv.config();
 
 const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
@@ -9,6 +13,9 @@ const __dirname = dirname(__filename);
 
 // Déterminer si on est en production avec PostgreSQL
 const isProduction = !!process.env.DATABASE_URL;
+
+console.log('🔍 DATABASE_URL présent:', !!process.env.DATABASE_URL);
+console.log('🔍 isProduction:', isProduction);
 
 let sqliteDb;
 let pool;
