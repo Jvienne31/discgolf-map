@@ -799,11 +799,6 @@ app.get('/api/admin/db-path', authenticateToken, requireAdmin, (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-  } catch (error) {
-    console.error('❌ Erreur liste backups:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 app.post('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
   try {
