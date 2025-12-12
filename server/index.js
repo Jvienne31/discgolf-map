@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import bcrypt from 'bcryptjs';
@@ -10,6 +9,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import puppeteer from 'puppeteer';
 import { createBackup, listBackups } from './backup.js';
+import { initializeDatabase, isProduction } from './database.js';
 
 // Charger les variables d'environnement
 dotenv.config();
@@ -51,97 +51,54 @@ app.use(session({
   }
 }));
 
-// Initialiser la base de données SQLite
-// Utiliser un chemin dans le volume Railway si disponible, sinon local
-// Railway: Si DATABASE_PATH n'est pas défini, utiliser /app/data en production
-const isProduction = process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
-const defaultPath = isProduction ? '/app/data/courses.db' : join(__dirname, 'courses.db');
-const dbPath = process.env.DATABASE_PATH || defaultPath;
+// Initialiser la base de données (SQLite local ou PostgreSQL production)
+let db;
 
-console.log('🔧 Configuration base de données:');
-console.log('   - Environnement:', isProduction ? 'PRODUCTION' : 'LOCAL');
-console.log('   - DATABASE_PATH env:', process.env.DATABASE_PATH || 'non défini');
-console.log('   - Chemin utilisé:', dbPath);
-
-// Créer le répertoire parent si nécessaire
-import { mkdirSync, existsSync, copyFileSync, accessSync, constants as fsConstants } from 'fs';
-import { dirname as pathDirname } from 'path';
-const dbDir = pathDirname(dbPath);
-try {
-  mkdirSync(dbDir, { recursive: true });
-  console.log('✅ Répertoire créé/vérifié:', dbDir);
+async function startServer() {
+  // Initialiser la base de données
+  db = await initializeDatabase();
   
-  // Vérifier les permissions d'écriture
-  accessSync(dbDir, fsConstants.W_OK);
-  console.log('✅ Permissions d\'écriture OK sur:', dbDir);
-} catch (err) {
-  console.error('❌ Erreur répertoire/permissions:', err.message);
-  throw err;
-}
+  console.log('🔧 Configuration base de données:');
+  console.log('   - Environnement:', isProduction ? 'PRODUCTION (PostgreSQL)' : 'LOCAL (SQLite)');
 
-console.log('📊 Base de données existe:', existsSync(dbPath) ? 'OUI' : 'NON');
+  // Initialiser les utilisateurs par défaut depuis les variables d'environnement
+  const initUsers = async () => {
+    const users = [
+      { 
+        username: process.env.DEFAULT_ADMIN_USERNAME || 'admin', 
+        password: process.env.DEFAULT_ADMIN_PASSWORD || 'changeme123', 
+        role: 'admin' 
+      },
+      { 
+        username: process.env.DEFAULT_USER1_USERNAME || 'user1', 
+        password: process.env.DEFAULT_USER1_PASSWORD || 'changeme123', 
+        role: 'user' 
+      },
+      { 
+        username: process.env.DEFAULT_USER2_USERNAME || 'user2', 
+        password: process.env.DEFAULT_USER2_PASSWORD || 'changeme123', 
+        role: 'user' 
+      }
+    ];
 
-const db = new Database(dbPath);
-
-// Créer les tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS courses (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    user_id INTEGER NOT NULL,
-    data TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
-`);
-
-// Initialiser les utilisateurs par défaut depuis les variables d'environnement
-const initUsers = () => {
-  const users = [
-    { 
-      username: process.env.DEFAULT_ADMIN_USERNAME || 'admin', 
-      password: process.env.DEFAULT_ADMIN_PASSWORD || 'changeme123', 
-      role: 'admin' 
-    },
-    { 
-      username: process.env.DEFAULT_USER1_USERNAME || 'user1', 
-      password: process.env.DEFAULT_USER1_PASSWORD || 'changeme123', 
-      role: 'user' 
-    },
-    { 
-      username: process.env.DEFAULT_USER2_USERNAME || 'user2', 
-      password: process.env.DEFAULT_USER2_PASSWORD || 'changeme123', 
-      role: 'user' 
-    }
-  ];
-
-  console.log('🔐 Vérification des utilisateurs par défaut...');
-  const checkUser = db.prepare('SELECT id FROM users WHERE username = ?');
-  const insertUser = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
-  
-  users.forEach(user => {
-    const existingUser = checkUser.get(user.username);
+    console.log('🔐 Vérification des utilisateurs par défaut...');
     
-    if (!existingUser) {
-      const hashedPassword = bcrypt.hashSync(user.password, 10);
-      insertUser.run(user.username, hashedPassword, user.role);
-      console.log(`   ✅ Utilisateur créé: ${user.username} (${user.role})`);
-    } else {
-      console.log(`   ℹ️  Utilisateur existant: ${user.username} (mot de passe préservé)`);
+    for (const user of users) {
+      const checkUser = db.prepare('SELECT id FROM users WHERE username = ?');
+      const existingUser = await checkUser.get(user.username);
+      
+      if (!existingUser) {
+        const hashedPassword = bcrypt.hashSync(user.password, 10);
+        const insertUser = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
+        await insertUser.run(user.username, hashedPassword, user.role);
+        console.log(`   ✅ Utilisateur créé: ${user.username} (${user.role})`);
+      } else {
+        console.log(`   ℹ️  Utilisateur existant: ${user.username} (mot de passe préservé)`);
+      }
     }
-  });
-};
+  };
 
-initUsers();
+  await initUsers();
 
 // Middleware d'authentification
 const authenticateToken = (req, res, next) => {
@@ -826,28 +783,37 @@ app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, (req, res) =>
   }
 });
 
-// Démarrer le serveur
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur backend démarré sur http://localhost:${PORT}`);
-  console.log(`📊 Base de données: ${join(__dirname, 'courses.db')}`);
-  
-  // Créer un backup initial au démarrage
-  try {
-    createBackup();
-    console.log('✅ Backup initial créé');
-  } catch (error) {
-    console.error('⚠️  Erreur backup initial:', error.message);
-  }
-  
-  // Planifier un backup automatique toutes les 24h
-  setInterval(() => {
-    try {
-      createBackup();
-      console.log('✅ Backup automatique créé');
-    } catch (error) {
-      console.error('⚠️  Erreur backup automatique:', error.message);
+  // Démarrer le serveur
+  app.listen(PORT, () => {
+    console.log(`🚀 Serveur backend démarré sur http://localhost:${PORT}`);
+    console.log(`📊 Base de données: ${isProduction ? 'PostgreSQL' : 'SQLite'}`);
+    
+    // Créer un backup initial au démarrage (uniquement SQLite local)
+    if (!isProduction) {
+      try {
+        createBackup();
+        console.log('✅ Backup initial créé');
+      } catch (error) {
+        console.error('⚠️  Erreur backup initial:', error.message);
+      }
+      
+      // Planifier un backup automatique toutes les 24h
+      setInterval(() => {
+        try {
+          createBackup();
+          console.log('✅ Backup automatique créé');
+        } catch (error) {
+          console.error('⚠️  Erreur backup automatique:', error.message);
+        }
+      }, 24 * 60 * 60 * 1000); // 24 heures
     }
-  }, 24 * 60 * 60 * 1000); // 24 heures
+  });
+}
+
+// Lancer le serveur
+startServer().catch(err => {
+  console.error('❌ Erreur au démarrage:', err);
+  process.exit(1);
 });
 
 // Fermer proprement la base de données à l'arrêt
