@@ -695,16 +695,22 @@ app.post('/api/admin/restore-db', authenticateToken, requireAdmin, async (req, r
     console.log(`🔄 Restauration: ${users.length} utilisateurs, ${courses.length} parcours`);
     
     // Restaurer les utilisateurs (sauf s'ils existent déjà)
-    const insertUser = await db.prepare('INSERT OR IGNORE INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)');
-    users.forEach(user => {
-      insertUser.run(user.id, user.username, user.password, user.role, user.created_at);
-    });
+    const insertUserStmt = isProduction 
+      ? 'INSERT INTO users (id, username, password, role, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (username) DO NOTHING'
+      : 'INSERT OR IGNORE INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)';
+    
+    for (const user of users) {
+      await db.prepare(insertUserStmt).run(user.id, user.username, user.password, user.role, user.created_at);
+    }
     
     // Restaurer les parcours
-    const insertCourse = await db.prepare('INSERT OR REPLACE INTO courses (id, name, user_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
-    courses.forEach(course => {
-      insertCourse.run(course.id, course.name, course.user_id, course.data, course.created_at, course.updated_at);
-    });
+    const insertCourseStmt = isProduction
+      ? 'INSERT INTO courses (id, name, user_id, data, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET name = $2, user_id = $3, data = $4, created_at = $5, updated_at = $6'
+      : 'INSERT OR REPLACE INTO courses (id, name, user_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)';
+    
+    for (const course of courses) {
+      await db.prepare(insertCourseStmt).run(course.id, course.name, course.user_id, course.data, course.created_at, course.updated_at);
+    }
     
     console.log('✅ Restauration terminée');
     res.json({ 
