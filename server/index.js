@@ -518,6 +518,21 @@ app.delete('/api/courses/:id', authenticateToken, (req, res) => {
   }
 });
 
+// ENDPOINT TEMPORAIRE - Télécharger la base de données (ADMIN SEULEMENT)
+app.get('/api/backup/download-db', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès refusé - Admin uniquement' });
+  }
+  
+  const dbPath = join(__dirname, 'courses.db');
+  res.download(dbPath, 'courses-backup.db', (err) => {
+    if (err) {
+      console.error('Erreur téléchargement DB:', err);
+      res.status(500).json({ error: 'Erreur lors du téléchargement' });
+    }
+  });
+});
+
 // Démarrer le serveur
 app.listen(PORT, () => {
   console.log(`🚀 Serveur backend démarré sur http://localhost:${PORT}`);
