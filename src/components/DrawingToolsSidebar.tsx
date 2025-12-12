@@ -16,7 +16,7 @@ import { useLeafletDrawing, CourseElement, serializeState } from '../contexts/Le
 import { useMapContext } from '../contexts/MapContext';
 import { lineString, bezierSpline, length } from '@turf/turf';
 import generateKMLContent from '../utils/kml';
-import { generatePlayerBooklet } from '../utils/player-booklet';
+import { exportCourseToPDF } from '../utils/pdf-export-simple';
 
 
 const DrawingToolsSidebar = () => {
@@ -146,10 +146,22 @@ const DrawingToolsSidebar = () => {
 
   const handleExportPDF = async () => {
     try {
-      const mapInstance = mapRef?.current;
-      await generatePlayerBooklet(state, state.name, mapInstance || undefined);
+      // mapRef est un RefObject<LeafletMap>
+      console.log('🔍 mapRef:', mapRef);
+      console.log('🔍 mapRef.current:', mapRef.current);
+      
+      if (!mapRef || !mapRef.current) {
+        console.error('❌ Instance de carte non trouvée');
+        alert('Erreur: La carte n\'est pas disponible pour l\'export');
+        return;
+      }
+      
+      console.log('🚀 Lancement export PDF avec leaflet-image...');
+      await exportCourseToPDF(state, mapRef.current);
+      alert('✅ PDF exporté avec succès !');
     } catch (e) {
-      console.error("Erreur lors de l'exportation PDF", e);
+      console.error("❌ Erreur lors de l'exportation PDF:", e);
+      alert(`Erreur lors de l'export PDF: ${e}`);
     }
   };
 
@@ -493,7 +505,6 @@ const DrawingToolsSidebar = () => {
         </Divider>
         <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportJson}>Exporter JSON</Button>
         <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportKml}>Exporter KML</Button>
-        {/* Fonctionnalité PDF temporairement désactivée
         <Button 
           size="small" 
           variant="outlined" 
@@ -501,9 +512,8 @@ const DrawingToolsSidebar = () => {
           onClick={handleExportPDF}
           color="primary"
         >
-          Exporter Carnet Joueur
+          Exporter PDF
         </Button>
-        */}
         <Divider sx={{ my: 1 }}>
           <Typography variant="caption" color="text.secondary">Importer</Typography>
         </Divider>
