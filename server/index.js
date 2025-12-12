@@ -357,7 +357,7 @@ app.get('/api/courses', authenticateToken, async (req, res) => {
     
     if (req.user.role === 'admin') {
       // Admin voit tous les parcours
-      courses = db.prepare(`
+      courses = await db.prepare(`
         SELECT c.id, c.name, c.created_at, c.updated_at, u.username as owner
         FROM courses c
         JOIN users u ON c.user_id = u.id
@@ -365,7 +365,7 @@ app.get('/api/courses', authenticateToken, async (req, res) => {
       `).all();
     } else {
       // Utilisateur ne voit que ses parcours
-      courses = db.prepare(`
+      courses = await db.prepare(`
         SELECT c.id, c.name, c.created_at, c.updated_at, u.username as owner
         FROM courses c
         JOIN users u ON c.user_id = u.id
