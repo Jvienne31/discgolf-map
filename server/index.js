@@ -784,6 +784,27 @@ app.get('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
+// ADMIN ENDPOINT - Diagnostic du chemin de la base de données
+app.get('/api/admin/db-path', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    res.json({
+      database_path_used: dbPath,
+      database_path_env: process.env.DATABASE_PATH || 'non défini',
+      is_production: isProduction,
+      railway_env: process.env.RAILWAY_ENVIRONMENT || 'non défini',
+      node_env: process.env.NODE_ENV || 'non défini',
+      file_exists: existsSync(dbPath)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+  } catch (error) {
+    console.error('❌ Erreur liste backups:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
   try {
     const backupPath = createBackup();
