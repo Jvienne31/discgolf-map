@@ -58,14 +58,25 @@ const isProduction = process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV ===
 const defaultPath = isProduction ? '/app/data/courses.db' : join(__dirname, 'courses.db');
 const dbPath = process.env.DATABASE_PATH || defaultPath;
 
+console.log('🔧 Configuration base de données:');
+console.log('   - Environnement:', isProduction ? 'PRODUCTION' : 'LOCAL');
+console.log('   - DATABASE_PATH env:', process.env.DATABASE_PATH || 'non défini');
+console.log('   - Chemin utilisé:', dbPath);
+
 // Créer le répertoire parent si nécessaire
-import { mkdirSync, existsSync, copyFileSync } from 'fs';
+import { mkdirSync, existsSync, copyFileSync, accessSync, constants as fsConstants } from 'fs';
 import { dirname as pathDirname } from 'path';
 const dbDir = pathDirname(dbPath);
 try {
   mkdirSync(dbDir, { recursive: true });
+  console.log('✅ Répertoire créé/vérifié:', dbDir);
+  
+  // Vérifier les permissions d'écriture
+  accessSync(dbDir, fsConstants.W_OK);
+  console.log('✅ Permissions d\'écriture OK sur:', dbDir);
 } catch (err) {
-  // Le répertoire existe déjà, pas de problème
+  console.error('❌ Erreur répertoire/permissions:', err.message);
+  throw err;
 }
 
 // PROTECTION: Si on utilise un volume Railway et qu'il est vide, copier la base locale
@@ -79,6 +90,8 @@ if (process.env.DATABASE_PATH && !existsSync(dbPath) && existsSync(localDbPath))
     console.error('❌ Erreur copie:', err);
   }
 }
+
+console.log('📊 Base de données existe:', existsSync(dbPath) ? 'OUI' : 'NON');
 
 const db = new Database(dbPath);
 
