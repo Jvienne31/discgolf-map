@@ -8,7 +8,6 @@ import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import puppeteer from 'puppeteer';
-import { createBackup, listBackups } from './backup.js';
 import { initializeDatabase, isProduction } from './database.js';
 
 // Charger les variables d'environnement
@@ -683,136 +682,10 @@ app.post('/api/capture-map', async (req, res) => {
   }
 });
 
-// ADMIN ENDPOINT - Restaurer la base de données depuis un backup
-app.post('/api/admin/restore-db', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { users, courses } = req.body;
-    
-    if (!users || !courses) {
-      return res.status(400).json({ error: 'Données manquantes (users et courses requis)' });
-    }
-    
-    console.log(`🔄 Restauration: ${users.length} utilisateurs, ${courses.length} parcours`);
-    
-    // Restaurer les utilisateurs (sauf s'ils existent déjà)
-    const insertUserStmt = isProduction 
-      ? 'INSERT INTO users (id, username, password, role, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (username) DO NOTHING'
-      : 'INSERT OR IGNORE INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)';
-    
-    for (const user of users) {
-      await db.prepare(insertUserStmt).run(user.id, user.username, user.password, user.role, user.created_at);
-    }
-    
-    // Restaurer les parcours
-    const insertCourseStmt = isProduction
-      ? 'INSERT INTO courses (id, name, user_id, data, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET name = $2, user_id = $3, data = $4, created_at = $5, updated_at = $6'
-      : 'INSERT OR REPLACE INTO courses (id, name, user_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)';
-    
-    for (const course of courses) {
-      await db.prepare(insertCourseStmt).run(course.id, course.name, course.user_id, course.data, course.created_at, course.updated_at);
-    }
-    
-    console.log('✅ Restauration terminée');
-    res.json({ 
-      message: 'Base de données restaurée avec succès',
-      users_restored: users.length,
-      courses_restored: courses.length
-    });
-  } catch (error) {
-    console.error('❌ Erreur restauration:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ADMIN ENDPOINT - Gestion des backups
-app.get('/api/admin/backups', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const backups = listBackups();
-    res.json({ backups, count: backups.length });
-  } catch (error) {
-    console.error('❌ Erreur liste backups:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ADMIN ENDPOINT - Diagnostic du chemin de la base de données
-app.get('/api/admin/db-path', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    res.json({
-      database_path_used: dbPath,
-      database_path_env: process.env.DATABASE_PATH || 'non défini',
-      is_production: isProduction,
-      railway_env: process.env.RAILWAY_ENVIRONMENT || 'non défini',
-      node_env: process.env.NODE_ENV || 'non défini',
-      file_exists: existsSync(dbPath)
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/admin/backups', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const backupPath = createBackup();
-    res.json({ 
-      success: true, 
-      message: 'Backup créé avec succès',
-      path: backupPath
-    });
-  } catch (error) {
-    console.error('❌ Erreur création backup:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ADMIN ENDPOINT - Explorer la base de données (temporaire pour diagnostic)
-app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const users = await db.prepare('SELECT id, username, role, created_at FROM users').all();
-    const courses = await db.prepare(`
-      SELECT c.id, c.name, c.user_id, u.username as owner, c.created_at, c.updated_at
-      FROM courses c
-      JOIN users u ON c.user_id = u.id
-      ORDER BY c.updated_at DESC
-    `).all();
-    
-    res.json({
-      database_path: dbPath,
-      users_count: users.length,
-      courses_count: courses.length,
-      users: users,
-      courses: courses
-    });
-  } catch (error) {
-    console.error('Erreur DB explorer:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
   // Démarrer le serveur
   app.listen(PORT, () => {
     console.log(`🚀 Serveur backend démarré sur http://localhost:${PORT}`);
     console.log(`📊 Base de données: ${isProduction ? 'PostgreSQL' : 'SQLite'}`);
-    
-    // Créer un backup initial au démarrage (uniquement SQLite local)
-    if (!isProduction) {
-      try {
-        createBackup();
-        console.log('✅ Backup initial créé');
-      } catch (error) {
-        console.error('⚠️  Erreur backup initial:', error.message);
-      }
-      
-      // Planifier un backup automatique toutes les 24h
-      setInterval(() => {
-        try {
-          createBackup();
-          console.log('✅ Backup automatique créé');
-        } catch (error) {
-          console.error('⚠️  Erreur backup automatique:', error.message);
-        }
-      }, 24 * 60 * 60 * 1000); // 24 heures
-    }
   });
 }
 
