@@ -84,12 +84,12 @@ async function startServer() {
     console.log('🔐 Vérification des utilisateurs par défaut...');
     
     for (const user of users) {
-      const checkUser = db.prepare('SELECT id FROM users WHERE username = ?');
+      const checkUser = await db.prepare('SELECT id FROM users WHERE username = ?');
       const existingUser = await checkUser.get(user.username);
       
       if (!existingUser) {
         const hashedPassword = bcrypt.hashSync(user.password, 10);
-        const insertUser = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
+        const insertUser = await db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
         await insertUser.run(user.username, hashedPassword, user.role);
         console.log(`   ✅ Utilisateur créé: ${user.username} (${user.role})`);
       } else {
@@ -141,7 +141,7 @@ app.get('/api/health', (req, res) => {
 // Routes d'authentification
 
 // POST /api/auth/login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -149,7 +149,7 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(400).json({ error: 'Identifiants requis' });
     }
     
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const user = await db.prepare('SELECT * FROM users WHERE username = ?').get(username);
     
     if (!user) {
       return res.status(401).json({ error: 'Identifiants invalides' });
@@ -190,13 +190,13 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // GET /api/auth/me - Vérifier la session
-app.get('/api/auth/me', authenticateToken, (req, res) => {
-  const user = db.prepare('SELECT id, username, email, role FROM users WHERE id = ?').get(req.user.id);
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  const user = await db.prepare('SELECT id, username, email, role FROM users WHERE id = ?').get(req.user.id);
   res.json({ user });
 });
 
 // POST /api/auth/change-password - Changer son mot de passe
-app.post('/api/auth/change-password', authenticateToken, (req, res) => {
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
   try {
     console.log('Change password request from user:', req.user);
     const { currentPassword, newPassword } = req.body;
@@ -209,7 +209,7 @@ app.post('/api/auth/change-password', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
     }
     
-    const user = db.prepare('SELECT password FROM users WHERE id = ?').get(req.user.id);
+    const user = await db.prepare('SELECT password FROM users WHERE id = ?').get(req.user.id);
     
     if (!user) {
       console.error('User not found with id:', req.user.id);
@@ -223,7 +223,7 @@ app.post('/api/auth/change-password', authenticateToken, (req, res) => {
     }
     
     const hashedPassword = bcrypt.hashSync(newPassword, 10);
-    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.user.id);
+    await db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.user.id);
     
     res.json({ message: 'Mot de passe modifié avec succès' });
   } catch (error) {
@@ -233,7 +233,7 @@ app.post('/api/auth/change-password', authenticateToken, (req, res) => {
 });
 
 // POST /api/auth/update-email - Modifier son email
-app.post('/api/auth/update-email', authenticateToken, (req, res) => {
+app.post('/api/auth/update-email', authenticateToken, async (req, res) => {
   try {
     const { email } = req.body;
     
@@ -241,7 +241,7 @@ app.post('/api/auth/update-email', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Email valide requis' });
     }
     
-    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, req.user.id);
+    await db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, req.user.id);
     
     res.json({ message: 'Email modifié avec succès' });
   } catch (error) {
@@ -253,9 +253,9 @@ app.post('/api/auth/update-email', authenticateToken, (req, res) => {
 // Routes admin
 
 // GET /api/admin/users - Liste tous les utilisateurs (admin uniquement)
-app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, email, role, created_at FROM users').all();
+    const users = await db.prepare('SELECT id, username, email, role, created_at FROM users').all();
     res.json(users);
   } catch (error) {
     console.error('Erreur lors de la récupération des utilisateurs:', error);
@@ -264,10 +264,10 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/users/:id/password - Voir le mot de passe d'un utilisateur (admin uniquement)
-app.get('/api/admin/users/:id/password', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/users/:id/password', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const user = db.prepare('SELECT username, password FROM users WHERE id = ?').get(id);
+    const user = await db.prepare('SELECT username, password FROM users WHERE id = ?').get(id);
     
     if (!user) {
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
@@ -286,7 +286,7 @@ app.get('/api/admin/users/:id/password', authenticateToken, requireAdmin, (req, 
 });
 
 // POST /api/admin/users/:id/reset-password - Réinitialiser le mot de passe d'un utilisateur (admin uniquement)
-app.post('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { newPassword } = req.body;
@@ -295,14 +295,14 @@ app.post('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin,
       return res.status(400).json({ error: 'Mot de passe valide requis (min 6 caractères)' });
     }
     
-    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(id);
+    const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(id);
     
     if (!user) {
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
     }
     
     const hashedPassword = bcrypt.hashSync(newPassword, 10);
-    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, id);
+    await db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, id);
     
     res.json({ message: `Mot de passe de ${user.username} réinitialisé avec succès` });
   } catch (error) {
@@ -312,7 +312,7 @@ app.post('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin,
 });
 
 // PUT /api/admin/users/:id - Modifier un utilisateur (admin uniquement)
-app.put('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { username, email, role } = req.body;
@@ -351,7 +351,7 @@ app.put('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
 // Routes API
 
 // GET /api/courses - Récupérer tous les parcours
-app.get('/api/courses', authenticateToken, (req, res) => {
+app.get('/api/courses', authenticateToken, async (req, res) => {
   try {
     let courses;
     
@@ -382,10 +382,10 @@ app.get('/api/courses', authenticateToken, (req, res) => {
 });
 
 // GET /api/courses/:id - Récupérer un parcours spécifique
-app.get('/api/courses/:id', authenticateToken, (req, res) => {
+app.get('/api/courses/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(id);
+    const course = await db.prepare('SELECT * FROM courses WHERE id = ?').get(id);
     
     if (!course) {
       return res.status(404).json({ error: 'Parcours non trouvé' });
@@ -414,7 +414,7 @@ app.get('/api/courses/:id', authenticateToken, (req, res) => {
 });
 
 // POST /api/courses - Créer un nouveau parcours
-app.post('/api/courses', authenticateToken, (req, res) => {
+app.post('/api/courses', authenticateToken, async (req, res) => {
   try {
     const { id, name, ...courseData } = req.body;
     
@@ -424,7 +424,7 @@ app.post('/api/courses', authenticateToken, (req, res) => {
     
     const dataJson = JSON.stringify(courseData);
     
-    const stmt = db.prepare(`
+    const stmt = await db.prepare(`
       INSERT INTO courses (id, name, user_id, data)
       VALUES (?, ?, ?, ?)
     `);
@@ -443,7 +443,7 @@ app.post('/api/courses', authenticateToken, (req, res) => {
 });
 
 // PUT /api/courses/:id - Mettre à jour un parcours
-app.put('/api/courses/:id', authenticateToken, (req, res) => {
+app.put('/api/courses/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, ...courseData } = req.body;
@@ -453,7 +453,7 @@ app.put('/api/courses/:id', authenticateToken, (req, res) => {
     }
     
     // Vérifier que l'utilisateur a le droit de modifier ce parcours
-    const course = db.prepare('SELECT user_id FROM courses WHERE id = ?').get(id);
+    const course = await db.prepare('SELECT user_id FROM courses WHERE id = ?').get(id);
     
     if (!course) {
       return res.status(404).json({ error: 'Parcours non trouvé' });
@@ -465,7 +465,7 @@ app.put('/api/courses/:id', authenticateToken, (req, res) => {
     
     const dataJson = JSON.stringify(courseData);
     
-    const stmt = db.prepare(`
+    const stmt = await db.prepare(`
       UPDATE courses 
       SET name = ?, data = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -481,12 +481,12 @@ app.put('/api/courses/:id', authenticateToken, (req, res) => {
 });
 
 // DELETE /api/courses/:id - Supprimer un parcours
-app.delete('/api/courses/:id', authenticateToken, (req, res) => {
+app.delete('/api/courses/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
     // Vérifier les permissions
-    const course = db.prepare('SELECT user_id FROM courses WHERE id = ?').get(id);
+    const course = await db.prepare('SELECT user_id FROM courses WHERE id = ?').get(id);
     
     if (!course) {
       return res.status(404).json({ error: 'Parcours non trouvé' });
@@ -496,7 +496,7 @@ app.delete('/api/courses/:id', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Accès refusé' });
     }
     
-    const stmt = db.prepare('DELETE FROM courses WHERE id = ?');
+    const stmt = await db.prepare('DELETE FROM courses WHERE id = ?');
     stmt.run(id);
     
     res.json({ message: 'Parcours supprimé avec succès' });
@@ -684,7 +684,7 @@ app.post('/api/capture-map', async (req, res) => {
 });
 
 // ADMIN ENDPOINT - Restaurer la base de données depuis un backup
-app.post('/api/admin/restore-db', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/restore-db', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { users, courses } = req.body;
     
@@ -695,13 +695,13 @@ app.post('/api/admin/restore-db', authenticateToken, requireAdmin, (req, res) =>
     console.log(`🔄 Restauration: ${users.length} utilisateurs, ${courses.length} parcours`);
     
     // Restaurer les utilisateurs (sauf s'ils existent déjà)
-    const insertUser = db.prepare('INSERT OR IGNORE INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)');
+    const insertUser = await db.prepare('INSERT OR IGNORE INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)');
     users.forEach(user => {
       insertUser.run(user.id, user.username, user.password, user.role, user.created_at);
     });
     
     // Restaurer les parcours
-    const insertCourse = db.prepare('INSERT OR REPLACE INTO courses (id, name, user_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+    const insertCourse = await db.prepare('INSERT OR REPLACE INTO courses (id, name, user_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
     courses.forEach(course => {
       insertCourse.run(course.id, course.name, course.user_id, course.data, course.created_at, course.updated_at);
     });
@@ -719,7 +719,7 @@ app.post('/api/admin/restore-db', authenticateToken, requireAdmin, (req, res) =>
 });
 
 // ADMIN ENDPOINT - Gestion des backups
-app.get('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/backups', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const backups = listBackups();
     res.json({ backups, count: backups.length });
@@ -730,7 +730,7 @@ app.get('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // ADMIN ENDPOINT - Diagnostic du chemin de la base de données
-app.get('/api/admin/db-path', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/db-path', authenticateToken, requireAdmin, async (req, res) => {
   try {
     res.json({
       database_path_used: dbPath,
@@ -745,7 +745,7 @@ app.get('/api/admin/db-path', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-app.post('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/backups', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const backupPath = createBackup();
     res.json({ 
@@ -760,10 +760,10 @@ app.post('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // ADMIN ENDPOINT - Explorer la base de données (temporaire pour diagnostic)
-app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, role, created_at FROM users').all();
-    const courses = db.prepare(`
+    const users = await db.prepare('SELECT id, username, role, created_at FROM users').all();
+    const courses = await db.prepare(`
       SELECT c.id, c.name, c.user_id, u.username as owner, c.created_at, c.updated_at
       FROM courses c
       JOIN users u ON c.user_id = u.id
