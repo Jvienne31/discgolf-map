@@ -79,18 +79,6 @@ try {
   throw err;
 }
 
-// PROTECTION: Si on utilise un volume Railway et qu'il est vide, copier la base locale
-const localDbPath = join(__dirname, 'courses.db');
-if (process.env.DATABASE_PATH && !existsSync(dbPath) && existsSync(localDbPath)) {
-  console.log('📋 Volume vide détecté, copie de la base locale vers le volume...');
-  try {
-    copyFileSync(localDbPath, dbPath);
-    console.log('✅ Base de données copiée vers le volume persistant');
-  } catch (err) {
-    console.error('❌ Erreur copie:', err);
-  }
-}
-
 console.log('📊 Base de données existe:', existsSync(dbPath) ? 'OUI' : 'NON');
 
 const db = new Database(dbPath);
