@@ -53,7 +53,10 @@ app.use(session({
 
 // Initialiser la base de données SQLite
 // Utiliser un chemin dans le volume Railway si disponible, sinon local
-const dbPath = process.env.DATABASE_PATH || join(__dirname, 'courses.db');
+// Railway: Si DATABASE_PATH n'est pas défini, utiliser /app/data en production
+const isProduction = process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+const defaultPath = isProduction ? '/app/data/courses.db' : join(__dirname, 'courses.db');
+const dbPath = process.env.DATABASE_PATH || defaultPath;
 
 // Créer le répertoire parent si nécessaire
 import { mkdirSync, existsSync, copyFileSync } from 'fs';
