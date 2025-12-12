@@ -9,6 +9,7 @@ import StartupScreen, { CourseListItem } from './components/StartupScreen';
 import { apiService } from './services/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { MapProvider } from './contexts/MapContext';
 import LoginPage from './components/LoginPage';
 
 const drawerWidth = 300;
@@ -213,7 +214,9 @@ const App = () => {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContent />
+        <MapProvider>
+          <AppContent />
+        </MapProvider>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -2,7 +2,7 @@
 import { Box, Button, Divider, Typography, Chip, IconButton, Stack, Select, MenuItem, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, InputAdornment, Snackbar, Slider, Alert } from '@mui/material';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import React from 'react';
-import { Add, Remove, Undo, Redo, Download, Save, Upload } from '@mui/icons-material';
+import { Add, Remove, Undo, Redo, Download, Save, Upload, AddLocation, PictureAsPdf } from '@mui/icons-material';
 import { 
   NearMe, 
   TrackChanges, 
@@ -13,12 +13,15 @@ import {
   Straighten
 } from '@mui/icons-material';
 import { useLeafletDrawing, CourseElement, serializeState } from '../contexts/LeafletDrawingContext';
+import { useMapContext } from '../contexts/MapContext';
 import { lineString, bezierSpline, length } from '@turf/turf';
 import generateKMLContent from '../utils/kml';
+import { generatePlayerBooklet } from '../utils/player-booklet';
 
 
 const DrawingToolsSidebar = () => {
   const { state, dispatch, saveCourse } = useLeafletDrawing();
+  const { fieldMode, userLocation, mapRef } = useMapContext();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDeleteHole, setPendingDeleteHole] = useState<number | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -138,6 +141,15 @@ const DrawingToolsSidebar = () => {
         URL.revokeObjectURL(url);
     } catch (e) {
         console.error("Erreur lors de l'exportation KML", e);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const mapInstance = mapRef?.current;
+      await generatePlayerBooklet(state, state.name, mapInstance || undefined);
+    } catch (e) {
+      console.error("Erreur lors de l'exportation PDF", e);
     }
   };
 
@@ -339,6 +351,29 @@ const DrawingToolsSidebar = () => {
             sx={{ justifyContent:'flex-start', fontSize:'0.75rem' }}
           >{tool.label}</Button>
         ))}
+        
+        {/* Bouton "Placer ici" en mode terrain */}
+        {fieldMode && userLocation && state.drawingMode && (state.drawingMode === 'basket' || state.drawingMode === 'tee' || state.drawingMode === 'mandatory') && (
+          <Button
+            variant="contained"
+            color="success"
+            size="small"
+            startIcon={<AddLocation />}
+            onClick={() => {
+              dispatch({ 
+                type: 'ADD_ELEMENT', 
+                payload: { 
+                  type: state.drawingMode!, 
+                  position: { lat: userLocation.lat, lng: userLocation.lng } 
+                } 
+              });
+            }}
+            sx={{ mt: 1, fontWeight: 'bold' }}
+          >
+            📍 Placer ici
+          </Button>
+        )}
+        
         <Stack direction="row" spacing={1} sx={{ mt:0.5 }}>
           <Tooltip title="Annuler (Ctrl+Z)"><span><IconButton size="small" onClick={() => dispatch({ type:'UNDO' })} disabled={state.past.length===0}><Undo fontSize="inherit" /></IconButton></span></Tooltip>
           <Tooltip title="Rétablir (Ctrl+Y)"><span><IconButton size="small" onClick={() => dispatch({ type:'REDO' })} disabled={state.future.length===0}><Redo fontSize="inherit" /></IconButton></span></Tooltip>
@@ -458,6 +493,17 @@ const DrawingToolsSidebar = () => {
         </Divider>
         <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportJson}>Exporter JSON</Button>
         <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportKml}>Exporter KML</Button>
+        {/* Fonctionnalité PDF temporairement désactivée
+        <Button 
+          size="small" 
+          variant="outlined" 
+          startIcon={<PictureAsPdf />} 
+          onClick={handleExportPDF}
+          color="primary"
+        >
+          Exporter Carnet Joueur
+        </Button>
+        */}
         <Divider sx={{ my: 1 }}>
           <Typography variant="caption" color="text.secondary">Importer</Typography>
         </Divider>

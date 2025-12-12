@@ -6,6 +6,8 @@ import { useLeafletDrawing } from '../contexts/LeafletDrawingContext';
 import { CourseElement, Position, LeafletDrawingAction } from '../contexts/types';
 import { layerConfigs, layerNames, BaseLayerKey, getElementColor, getPathOptions, COLORS, SimpleLayerConfig, SatelliteLabelsConfig } from '../utils/layers';
 import MeasurementLayer from './MeasurementLayer';
+import { UserLocationMarker } from './UserLocationMarker';
+import { mapRef } from '../contexts/MapContext';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { lineString, bezierSpline } from '@turf/turf';
@@ -363,6 +365,7 @@ const DiagnosticMapComponent = () => {
   return (
     <Box ref={mapContainerRef} sx={{ position: 'relative', height: '100%', width: '100%' }}>
       <MapContainer 
+        ref={mapRef}
         center={[43.568375, 1.518657]} 
         zoom={18} 
         style={{ height: '100%', width: '100%', cursor: drawingState.drawingMode ? 'crosshair' : 'grab' }} 
@@ -376,6 +379,7 @@ const DiagnosticMapComponent = () => {
         <TemporaryPath/>
         <VertexMarkers element={selectedElement} dispatch={drawingDispatch} />
         {mapReady && <MeasurementLayer />}
+        <UserLocationMarker />
       </MapContainer>
 
       <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 1 }}>
