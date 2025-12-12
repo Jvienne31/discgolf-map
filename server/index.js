@@ -709,6 +709,30 @@ app.post('/api/capture-map', async (req, res) => {
   }
 });
 
+// ADMIN ENDPOINT - Explorer la base de données (temporaire pour diagnostic)
+app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const users = db.prepare('SELECT id, username, role, created_at FROM users').all();
+    const courses = db.prepare(`
+      SELECT c.id, c.name, c.user_id, u.username as owner, c.created_at, c.updated_at
+      FROM courses c
+      JOIN users u ON c.user_id = u.id
+      ORDER BY c.updated_at DESC
+    `).all();
+    
+    res.json({
+      database_path: dbPath,
+      users_count: users.length,
+      courses_count: courses.length,
+      users: users,
+      courses: courses
+    });
+  } catch (error) {
+    console.error('Erreur DB explorer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Démarrer le serveur
 app.listen(PORT, () => {
   console.log(`🚀 Serveur backend démarré sur http://localhost:${PORT}`);
