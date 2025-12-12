@@ -9,6 +9,7 @@ import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import puppeteer from 'puppeteer';
+import { createBackup, listBackups } from './backup.js';
 
 // Charger les variables d'environnement
 dotenv.config();
@@ -744,6 +745,31 @@ app.post('/api/admin/restore-db', authenticateToken, requireAdmin, (req, res) =>
   }
 });
 
+// ADMIN ENDPOINT - Gestion des backups
+app.get('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const backups = listBackups();
+    res.json({ backups, count: backups.length });
+  } catch (error) {
+    console.error('❌ Erreur liste backups:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/backups', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const backupPath = createBackup();
+    res.json({ 
+      success: true, 
+      message: 'Backup créé avec succès',
+      path: backupPath
+    });
+  } catch (error) {
+    console.error('❌ Erreur création backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ADMIN ENDPOINT - Explorer la base de données (temporaire pour diagnostic)
 app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, (req, res) => {
   try {
@@ -772,6 +798,24 @@ app.get('/api/admin/db-explorer', authenticateToken, requireAdmin, (req, res) =>
 app.listen(PORT, () => {
   console.log(`🚀 Serveur backend démarré sur http://localhost:${PORT}`);
   console.log(`📊 Base de données: ${join(__dirname, 'courses.db')}`);
+  
+  // Créer un backup initial au démarrage
+  try {
+    createBackup();
+    console.log('✅ Backup initial créé');
+  } catch (error) {
+    console.error('⚠️  Erreur backup initial:', error.message);
+  }
+  
+  // Planifier un backup automatique toutes les 24h
+  setInterval(() => {
+    try {
+      createBackup();
+      console.log('✅ Backup automatique créé');
+    } catch (error) {
+      console.error('⚠️  Erreur backup automatique:', error.message);
+    }
+  }, 24 * 60 * 60 * 1000); // 24 heures
 });
 
 // Fermer proprement la base de données à l'arrêt
