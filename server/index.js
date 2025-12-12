@@ -53,6 +53,17 @@ app.use(session({
 // Initialiser la base de données SQLite
 // Utiliser un chemin dans le volume Railway si disponible, sinon local
 const dbPath = process.env.DATABASE_PATH || join(__dirname, 'courses.db');
+
+// Créer le répertoire parent si nécessaire
+import { mkdirSync } from 'fs';
+import { dirname as pathDirname } from 'path';
+const dbDir = pathDirname(dbPath);
+try {
+  mkdirSync(dbDir, { recursive: true });
+} catch (err) {
+  // Le répertoire existe déjà, pas de problème
+}
+
 const db = new Database(dbPath);
 
 // Créer les tables
