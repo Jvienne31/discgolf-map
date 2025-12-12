@@ -15,6 +15,7 @@ interface MapContextType {
   userLocation: { lat: number; lng: number } | null;
   setUserLocation: (location: { lat: number; lng: number } | null) => void;
   recenterOnUser: () => void;
+  mapRef: React.RefObject<LeafletMap>;
 }
 
 const MapContext = createContext<MapContextType | undefined>(undefined);
@@ -55,6 +56,7 @@ export const MapProvider = ({ children }: MapProviderProps) => {
         userLocation,
         setUserLocation,
         recenterOnUser,
+        mapRef,
       }}
     >
       {children}

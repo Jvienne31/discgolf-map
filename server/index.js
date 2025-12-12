@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import puppeteer from 'puppeteer';
 
 // Charger les variables d'environnement
 dotenv.config();
@@ -515,6 +516,183 @@ app.delete('/api/courses/:id', authenticateToken, (req, res) => {
   } catch (error) {
     console.error('Erreur lors de la suppression du parcours:', error);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Route de capture d'écran avec Puppeteer
+app.post('/api/capture-map', async (req, res) => {
+  let browser;
+  try {
+    console.log('📸 Requête de capture reçue');
+    const { bounds, width = 800, height = 600, elements = [] } = req.body;
+    
+    if (!bounds || !bounds._southWest || !bounds._northEast) {
+      return res.status(400).json({ error: 'Bounds invalides' });
+    }
+
+    // Lancer Puppeteer
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setViewport({ width, height });
+    
+    // Créer une page HTML temporaire avec Leaflet
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; }
+    #map { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      window.map = L.map('map', { 
+        zoomControl: false,
+        attributionControl: false 
+      });
+      
+      // Utiliser la vue satellite de Google ou Esri
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${'{z}'}/{'{y}'}/{'{x}'}', {
+        maxZoom: 19,
+        attribution: 'Esri'
+      }).addTo(window.map);
+      
+      const bounds = L.latLngBounds(
+        [${bounds._southWest.lat}, ${bounds._southWest.lng}],
+        [${bounds._northEast.lat}, ${bounds._northEast.lng}]
+      );
+      
+      window.map.fitBounds(bounds, { padding: [50, 50] });
+      window.mapReady = true;
+    });
+  </script>
+</body>
+</html>`;
+
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    
+    console.log('⏳ Attente du chargement de la carte et des tuiles...');
+    
+    // Attendre que Leaflet et le DOM soient complètement chargés
+    await page.waitForFunction('window.mapReady === true', { timeout: 10000 });
+    
+    // Attendre encore un peu pour les tuiles
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Vérifier que la carte est bien initialisée
+    const mapReady = await page.evaluate(() => {
+      return window.map && typeof window.map.addLayer === 'function';
+    });
+    
+    console.log('✅ Carte chargée:', mapReady ? 'OUI' : 'NON');
+    
+    if (!mapReady) {
+      throw new Error('La carte Leaflet n\'est pas correctement initialisée');
+    }
+    
+    console.log('✅ Ajout des éléments...');
+    
+    // Passer les éléments à la page et les dessiner
+    await page.evaluate((elements) => {
+      const map = window.map;
+      if (!map) {
+        throw new Error('Map not found on window object');
+      }
+      
+      if (typeof map.addLayer !== 'function') {
+        throw new Error('map.addLayer is not a function - Leaflet may not be fully loaded');
+      }
+      
+      elements.forEach(el => {
+        if (el.type === 'tee' && el.position) {
+          L.circleMarker([el.position.lat, el.position.lng], {
+            radius: 8,
+            fillColor: '#2196F3',
+            color: '#1976D2',
+            weight: 2,
+            fillOpacity: 0.8
+          }).addTo(map);
+        } else if (el.type === 'basket' && el.position) {
+          L.circleMarker([el.position.lat, el.position.lng], {
+            radius: 8,
+            fillColor: '#F44336',
+            color: '#D32F2F',
+            weight: 2,
+            fillOpacity: 0.8
+          }).addTo(map);
+        } else if (el.type === 'flight-path' && el.path && el.path.length > 0) {
+          L.polyline(el.path.map(p => [p.lat, p.lng]), {
+            color: '#4CAF50',
+            weight: 3,
+            opacity: 0.8,
+            dashArray: '5, 5'
+          }).addTo(map);
+        } else if (el.type === 'ob-line' && el.path && el.path.length > 0) {
+          L.polyline(el.path.map(p => [p.lat, p.lng]), {
+            color: '#F44336',
+            weight: 3,
+            opacity: 0.8
+          }).addTo(map);
+        } else if (el.type === 'ob-zone' && el.path && el.path.length > 0) {
+          L.polygon(el.path.map(p => [p.lat, p.lng]), {
+            color: '#F44336',
+            fillColor: '#F44336',
+            weight: 2,
+            fillOpacity: 0.2,
+            opacity: 0.8
+          }).addTo(map);
+        } else if (el.type === 'mandatory' && el.position) {
+          L.circleMarker([el.position.lat, el.position.lng], {
+            radius: 6,
+            fillColor: '#FFC107',
+            color: '#FF9800',
+            weight: 2,
+            fillOpacity: 0.8
+          }).addTo(map);
+        } else if (el.type === 'hazard' && el.path && el.path.length > 0) {
+          L.polygon(el.path.map(p => [p.lat, p.lng]), {
+            color: '#FF9800',
+            fillColor: '#FF9800',
+            weight: 2,
+            fillOpacity: 0.2,
+            opacity: 0.8
+          }).addTo(map);
+        }
+      });
+    }, elements);
+    
+    console.log('✅ Éléments ajoutés, attente finale avant capture...');
+    
+    // Attendre encore un peu pour être sûr que tout est rendu
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Capturer la carte
+    const screenshot = await page.screenshot({ 
+      type: 'png',
+      encoding: 'base64'
+    });
+    
+    await browser.close();
+    
+    console.log('✅ Capture réussie');
+    res.json({ 
+      success: true, 
+      image: `data:image/png;base64,${screenshot}` 
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur capture Puppeteer:', error);
+    if (browser) await browser.close();
+    res.status(500).json({ error: error.message });
   }
 });
 
