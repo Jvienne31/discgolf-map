@@ -4,6 +4,45 @@ import domtoimage from 'dom-to-image-more';
 import { lineString, length as turfLength, bezierSpline } from '@turf/turf';
 
 /**
+ * Fait pivoter une image et retourne la nouvelle dataUrl avec dimensions correctes
+ */
+async function rotateImage(dataUrl: string, angleDegrees: number): Promise<{dataUrl: string, width: number, height: number}> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      
+      // Calculer les nouvelles dimensions après rotation
+      const angleRad = (angleDegrees * Math.PI) / 180;
+      const cos = Math.abs(Math.cos(angleRad));
+      const sin = Math.abs(Math.sin(angleRad));
+      const newWidth = Math.round(img.width * cos + img.height * sin);
+      const newHeight = Math.round(img.width * sin + img.height * cos);
+      
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      
+      // Fond de couleur
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(0, 0, newWidth, newHeight);
+      
+      // Appliquer la rotation au centre
+      ctx.translate(newWidth / 2, newHeight / 2);
+      ctx.rotate(angleRad);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2, img.width, img.height);
+      
+      resolve({
+        dataUrl: canvas.toDataURL('image/jpeg', 0.95),
+        width: newWidth,
+        height: newHeight
+      });
+    };
+    img.src = dataUrl;
+  });
+}
+
+/**
  * Calcule les statistiques d'un trou individuel
  */
 function calculateHoleStats(hole: CourseHole) {
@@ -61,6 +100,109 @@ function calculateCourseStats(state: LeafletDrawingState) {
 }
 
 /**
+ * Recadre une image pour enlever les zones vides (trim)
+ */
+async function trimImage(dataUrl: string): Promise<{dataUrl: string, width: number, height: number}> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Unable to get canvas context'));
+        return;
+      }
+      
+      // Dessiner l'image sur un canvas temporaire
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      
+      // Obtenir les pixels
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = imageData.data;
+      
+      // Couleur de fond à détecter (#f5f5f5 = rgb(245, 245, 245))
+      const bgColor = { r: 245, g: 245, b: 245 };
+      const tolerance = 15; // Tolérance augmentée
+      
+      // Trouver les limites du contenu non-vide
+      let top = canvas.height;
+      let bottom = 0;
+      let left = canvas.width;
+      let right = 0;
+      
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+          const i = (y * canvas.width + x) * 4;
+          const r = pixels[i];
+          const g = pixels[i + 1];
+          const b = pixels[i + 2];
+          
+          // Vérifier si ce pixel n'est pas du fond
+          if (Math.abs(r - bgColor.r) > tolerance || 
+              Math.abs(g - bgColor.g) > tolerance || 
+              Math.abs(b - bgColor.b) > tolerance) {
+            if (y < top) top = y;
+            if (y > bottom) bottom = y;
+            if (x < left) left = x;
+            if (x > right) right = x;
+          }
+        }
+      }
+      
+      // Si aucun contenu trouvé, retourner l'image originale
+      if (top >= bottom || left >= right) {
+        resolve({
+          dataUrl: dataUrl,
+          width: img.width,
+          height: img.height
+        });
+        return;
+      }
+      
+      // Ajouter une marge proportionnelle (5% de chaque dimension)
+      const marginY = Math.floor((bottom - top) * 0.05);
+      const marginX = Math.floor((right - left) * 0.05);
+      
+      top = Math.max(0, top - marginY);
+      bottom = Math.min(canvas.height - 1, bottom + marginY);
+      left = Math.max(0, left - marginX);
+      right = Math.min(canvas.width - 1, right + marginX);
+      
+      // Créer un nouveau canvas avec les dimensions recadrées
+      const croppedWidth = right - left + 1;
+      const croppedHeight = bottom - top + 1;
+      
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = croppedWidth;
+      croppedCanvas.height = croppedHeight;
+      const croppedCtx = croppedCanvas.getContext('2d');
+      
+      if (!croppedCtx) {
+        reject(new Error('Unable to get cropped canvas context'));
+        return;
+      }
+      
+      // Copier la partie recadrée
+      croppedCtx.drawImage(
+        canvas,
+        left, top, croppedWidth, croppedHeight,
+        0, 0, croppedWidth, croppedHeight
+      );
+      
+      resolve({
+        dataUrl: croppedCanvas.toDataURL('image/jpeg', 0.95),
+        width: croppedWidth,
+        height: croppedHeight
+      });
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+/**
  * Capture la carte et retourne une image avec dimensions proportionnelles
  */
 async function captureMap(
@@ -69,26 +211,50 @@ async function captureMap(
   hole?: CourseHole
 ): Promise<{dataUrl: string, width: number, height: number}> {
   
+  let rotationAngle = 0;
+  
   // Si un trou est spécifié, zoomer dessus
   if (hole) {
     const tee = hole.elements.find(el => el.type === 'tee');
     const basket = hole.elements.find(el => el.type === 'basket');
     
     if (tee && basket && tee.position && basket.position) {
-      // Créer un bounds incluant uniquement le tee et le basket pour un zoom très serré
-      const bounds = [
+      // Collecter tous les points à inclure
+      const allPoints: [number, number][] = [
         [tee.position.lat, tee.position.lng],
         [basket.position.lat, basket.position.lng]
       ];
       
-      // Ajouter la trajectoire si elle existe (pour voir le chemin)
+      // Ajouter la trajectoire
       const flightPath = hole.elements.find(el => el.type === 'flight-path');
       if (flightPath && flightPath.path) {
-        flightPath.path.forEach(p => bounds.push([p.lat, p.lng]));
+        flightPath.path.forEach(p => allPoints.push([p.lat, p.lng]));
       }
       
-      // Zoomer au maximum sur le trou (padding minimal pour coller aux bords)
-      mapInstance.fitBounds(bounds, { padding: [5, 5], maxZoom: 20 });
+      // Calculer les limites min/max
+      const lats = allPoints.map(p => p[0]);
+      const lngs = allPoints.map(p => p[1]);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      
+      // Calculer les dimensions
+      const latRange = maxLat - minLat;
+      const lngRange = maxLng - minLng;
+      
+      // Ajouter un buffer pour avoir de l'espace autour (30% de marge)
+      const bufferLat = latRange * 0.3;
+      const bufferLng = lngRange * 0.3;
+      
+      // Créer un bounds rectangulaire élargi
+      const expandedBounds: [[number, number], [number, number]] = [
+        [minLat - bufferLat, minLng - bufferLng],
+        [maxLat + bufferLat, maxLng + bufferLng]
+      ];
+      
+      // Zoomer sur ce rectangle
+      mapInstance.fitBounds(expandedBounds, { maxZoom: 19, animate: false });
     }
   } else {
     // Vue complète du parcours - récupérer tous les éléments
@@ -121,7 +287,7 @@ async function captureMap(
   await new Promise(resolve => setTimeout(resolve, 200));
   
   // Capturer
-  const dataUrl = await domtoimage.toJpeg(mapContainer, {
+  let dataUrl = await domtoimage.toJpeg(mapContainer, {
     quality: 0.95,
     bgcolor: '#f5f5f5',
     width: mapContainer.offsetWidth,
@@ -132,10 +298,29 @@ async function captureMap(
     }
   });
   
+  let finalWidth = mapContainer.offsetWidth;
+  let finalHeight = mapContainer.offsetHeight;
+  
+  // Recadrer l'image pour enlever les zones vides (trim)
+  if (hole) {
+    const trimResult = await trimImage(dataUrl);
+    dataUrl = trimResult.dataUrl;
+    finalWidth = trimResult.width;
+    finalHeight = trimResult.height;
+  }
+  
+  // Appliquer la rotation si nécessaire
+  if (rotationAngle !== 0) {
+    const rotated = await rotateImage(dataUrl, rotationAngle);
+    dataUrl = rotated.dataUrl;
+    finalWidth = rotated.width;
+    finalHeight = rotated.height;
+  }
+  
   return {
     dataUrl,
-    width: mapContainer.offsetWidth,
-    height: mapContainer.offsetHeight
+    width: finalWidth,
+    height: finalHeight
   };
 }
 
