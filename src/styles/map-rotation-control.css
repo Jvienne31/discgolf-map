@@ -1,0 +1,45 @@
+/* Contrôle de rotation de la carte - 2 boutons séparés */
+.leaflet-control-rotation-buttons {
+  background: white;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  margin: 10px;
+}
+
+.leaflet-control-rotate-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-bottom: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  padding: 3px;
+  transition: background 0.2s ease;
+}
+
+.leaflet-control-rotate-btn:last-child {
+  border-bottom: none;
+  border-bottom-left-radius: 2px;
+  border-bottom-right-radius: 2px;
+}
+
+.leaflet-control-rotate-btn:first-child {
+  border-top-left-radius: 2px;
+  border-top-right-radius: 2px;
+}
+
+.leaflet-control-rotate-btn:hover {
+  background: #f0f0f0;
+}
+
+.leaflet-control-rotate-btn:active {
+  background: #e0e0e0;
+}
+
+.leaflet-touch .leaflet-control-rotate-btn {
+  width: 34px;
+  height: 34px;
+}

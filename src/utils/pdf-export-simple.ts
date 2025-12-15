@@ -208,12 +208,13 @@ async function trimImage(dataUrl: string): Promise<{dataUrl: string, width: numb
 async function captureMap(
   mapInstance: any, 
   mapContainer: HTMLElement, 
-  hole?: CourseHole
+  hole?: CourseHole,
+  allHoles?: CourseHole[]
 ): Promise<{dataUrl: string, width: number, height: number}> {
   
   let rotationAngle = 0;
   
-  // Si un trou est spécifié, zoomer dessus
+  // Si un trou est spécifié, zoomer dessus avec cadrage adaptatif
   if (hole) {
     const tee = hole.elements.find(el => el.type === 'tee');
     const basket = hole.elements.find(el => el.type === 'basket');
@@ -231,7 +232,7 @@ async function captureMap(
         flightPath.path.forEach(p => allPoints.push([p.lat, p.lng]));
       }
       
-      // Calculer les limites min/max
+      // Calculer les limites exactes
       const lats = allPoints.map(p => p[0]);
       const lngs = allPoints.map(p => p[1]);
       const minLat = Math.min(...lats);
@@ -239,25 +240,69 @@ async function captureMap(
       const minLng = Math.min(...lngs);
       const maxLng = Math.max(...lngs);
       
-      // Calculer les dimensions
-      const latRange = maxLat - minLat;
-      const lngRange = maxLng - minLng;
+      // Ajouter une marge minimale de 3 mètres de chaque côté
+      const marginMeters = 3;
+      const marginLat = marginMeters / 111000; // ~111km par degré
+      const marginLng = marginMeters / (111000 * Math.cos((minLat + maxLat) / 2 * Math.PI / 180));
       
-      // Ajouter un buffer pour avoir de l'espace autour (30% de marge)
-      const bufferLat = latRange * 0.3;
-      const bufferLng = lngRange * 0.3;
-      
-      // Créer un bounds rectangulaire élargi
-      const expandedBounds: [[number, number], [number, number]] = [
-        [minLat - bufferLat, minLng - bufferLng],
-        [maxLat + bufferLat, maxLng + bufferLng]
+      const bounds: [[number, number], [number, number]] = [
+        [minLat - marginLat, minLng - marginLng],
+        [maxLat + marginLat, maxLng + marginLng]
       ];
       
-      // Zoomer sur ce rectangle
-      mapInstance.fitBounds(expandedBounds, { maxZoom: 19, animate: false });
+      // fitBounds SANS padding automatique et SANS limite de zoom
+      mapInstance.fitBounds(bounds, { 
+        padding: [0, 0],
+        animate: false 
+      });
+    }
+  } else if (allHoles && allHoles.length > 0) {
+    // Vue complète du parcours - analyser tous les tees et paniers
+    const allPoints: [number, number][] = [];
+    
+    for (const hole of allHoles) {
+      const tee = hole.elements.find(el => el.type === 'tee');
+      const basket = hole.elements.find(el => el.type === 'basket');
+      
+      if (tee && tee.position) {
+        allPoints.push([tee.position.lat, tee.position.lng]);
+      }
+      if (basket && basket.position) {
+        allPoints.push([basket.position.lat, basket.position.lng]);
+      }
+      
+      // Ajouter aussi les trajectoires pour un cadrage complet
+      const flightPath = hole.elements.find(el => el.type === 'flight-path');
+      if (flightPath && flightPath.path) {
+        flightPath.path.forEach(p => allPoints.push([p.lat, p.lng]));
+      }
+    }
+    
+    if (allPoints.length > 0) {
+      const lats = allPoints.map(p => p[0]);
+      const lngs = allPoints.map(p => p[1]);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      
+      // Ajouter une marge minimale pour la vue d'ensemble (2 mètres)
+      const marginMeters = 2;
+      const marginLat = marginMeters / 111000;
+      const marginLng = marginMeters / (111000 * Math.cos((minLat + maxLat) / 2 * Math.PI / 180));
+      
+      const bounds: [[number, number], [number, number]] = [
+        [minLat - marginLat, minLng - marginLng],
+        [maxLat + marginLat, maxLng + marginLng]
+      ];
+      
+      mapInstance.fitBounds(bounds, { 
+        padding: [0, 0],
+        animate: false 
+      });
     }
   } else {
-    // Vue complète du parcours - récupérer tous les éléments
+    // Fallback : récupérer tous les éléments de la carte
     const allBounds: [number, number][] = [];
     
     for (const hole of mapInstance._layers ? Object.values(mapInstance._layers) : []) {
@@ -275,7 +320,7 @@ async function captureMap(
     }
     
     if (allBounds.length > 0) {
-      mapInstance.fitBounds(allBounds, { padding: [30, 30] });
+      mapInstance.fitBounds(allBounds, { padding: [10, 10] });
     }
   }
   
@@ -406,51 +451,86 @@ export async function exportCourseToPDF(
     
     // ========== PAGE 1 : RÉCAPITULATIF DU PARCOURS ==========
     
-    // Titre
+    // Bannière de titre avec fond bleu
+    pdf.setFillColor(41, 128, 185); // Bleu moderne
+    pdf.rect(0, 0, pageWidth, 35, 'F');
+    
+    // Titre en blanc
     pdf.setFontSize(26);
     pdf.setFont('helvetica', 'bold');
-    pdf.text(state.name || 'Parcours Disc Golf', pageWidth / 2, 25, { align: 'center' });
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(state.name || 'Parcours Disc Golf', pageWidth / 2, 20, { align: 'center' });
     
-    // Ligne de séparation
-    pdf.setDrawColor(100, 100, 100);
-    pdf.setLineWidth(0.5);
-    pdf.line(margin, 32, pageWidth - margin, 32);
+    // Sous-titre
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, 28, { align: 'center' });
     
-    // Statistiques globales
+    pdf.setTextColor(0, 0, 0);
+    
+    // Ligne de séparation décorative
+    pdf.setDrawColor(52, 152, 219);
+    pdf.setLineWidth(1);
+    pdf.line(margin, 38, pageWidth - margin, 38);
+    
+    // Statistiques globales avec carte
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Statistiques du parcours', margin, 45);
+    pdf.setTextColor(52, 73, 94); // Gris foncé
+    pdf.text('Statistiques du parcours', margin, 50);
     
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'normal');
-    let yPos = 55;
+    let yPos = 60;
     
-    pdf.text(`Nombre de trous :`, margin, yPos);
-    pdf.text(`${stats.totalHoles}`, margin + 60, yPos);
-    yPos += 7;
+    // Carte d'informations avec fond gris clair
+    pdf.setFillColor(236, 240, 241);
+    pdf.roundedRect(margin, yPos - 5, contentWidth, 35, 3, 3, 'F');
     
-    pdf.text(`Par total :`, margin, yPos);
-    pdf.text(`${stats.totalPar}`, margin + 60, yPos);
-    yPos += 7;
+    yPos += 3;
     
-    pdf.text(`Distance à vol d'oiseau :`, margin, yPos);
-    pdf.text(`${stats.totalDistanceStraight} m`, margin + 60, yPos);
-    yPos += 7;
+    // Première colonne
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(52, 73, 94);
+    pdf.text(`Nombre de trous :`, margin + 5, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(41, 128, 185); // Bleu
+    pdf.text(`${stats.totalHoles}`, margin + 50, yPos);
+    yPos += 8;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(52, 73, 94);
+    pdf.text(`Par total :`, margin + 5, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(41, 128, 185);
+    pdf.text(`${stats.totalPar}`, margin + 50, yPos);
+    
+    // Deuxième colonne
+    yPos -= 8;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(52, 73, 94);
+    pdf.text(`Distance à vol d'oiseau :`, margin + 100, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(41, 128, 185);
+    pdf.text(`${stats.totalDistanceStraight} m`, margin + 160, yPos);
+    yPos += 8;
     
     if (stats.totalDistancePath > 0) {
-      pdf.text(`Distance trajectoire :`, margin, yPos);
-      pdf.text(`${stats.totalDistancePath} m`, margin + 60, yPos);
-      yPos += 7;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(52, 73, 94);
+      pdf.text(`Distance trajectoire :`, margin + 100, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(46, 204, 113); // Vert
+      pdf.text(`${stats.totalDistancePath} m`, margin + 160, yPos);
     }
     
-    pdf.text(`Date d'export :`, margin, yPos);
-    pdf.text(new Date().toLocaleDateString('fr-FR'), margin + 60, yPos);
-    yPos += 12;
+    pdf.setTextColor(0, 0, 0);
+    yPos += 15;
     
     // Carte complète du parcours
     console.log('📷 Capture de la carte complète du parcours...');
     try {
-      const { dataUrl, width, height } = await captureMap(mapInstance, mapContainer);
+      const { dataUrl, width, height } = await captureMap(mapInstance, mapContainer, undefined, state.holes);
       
       // Dimensions pour la carte (moitié de la page environ)
       const maxMapWidth = contentWidth;
@@ -479,41 +559,67 @@ export async function exportCourseToPDF(
     }
     
     // Tableau récapitulatif des trous
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Détail des trous', margin, yPos);
-    yPos += 7;
+  pdf.setFontSize(14);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(52, 73, 94);
+  pdf.text('Detail des trous', margin, yPos);
+  yPos += 10;
+  
+  // En-têtes du tableau avec fond bleu
+  const colX = [margin + 2, margin + 32, margin + 62, margin + 112];
+  const colWidths = [28, 28, 48, 48];
+  const rowHeight = 7;
+  
+  pdf.setFillColor(41, 128, 185); // Bleu
+  pdf.rect(margin, yPos - 5, contentWidth, rowHeight, 'F');
+  
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(255, 255, 255);
+  pdf.text('Trou', colX[0], yPos);
+  pdf.text('Par', colX[1], yPos);
+  pdf.text('Vol oiseau', colX[2], yPos);
+  pdf.text('Trajectoire', colX[3], yPos);
+  yPos += rowHeight;
+  
+  // Lignes du tableau avec alternance de couleurs
+  pdf.setFont('helvetica', 'normal');
+  let rowIndex = 0;
+  
+  for (const hole of state.holes) {
+    // Vérifier si on doit changer de page
+    if (yPos > pageHeight - 30) {
+      pdf.addPage();
+      yPos = 20;
+      rowIndex = 0;
+    }
     
-    // En-têtes du tableau
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'bold');
-    const colX = [margin, margin + 30, margin + 60, margin + 110];
-    pdf.text('Trou', colX[0], yPos);
-    pdf.text('Par', colX[1], yPos);
-    pdf.text('Vol oiseau', colX[2], yPos);
-    pdf.text('Trajectoire', colX[3], yPos);
-    yPos += 2;
+    const holeStats = calculateHoleStats(hole);
     
-    // Ligne sous en-têtes
-    pdf.line(margin, yPos, pageWidth - margin, yPos);
-    yPos += 5;
+    // Fond alternant blanc/gris très clair
+    if (rowIndex % 2 === 0) {
+      pdf.setFillColor(249, 249, 249);
+    } else {
+      pdf.setFillColor(255, 255, 255);
+    }
+    pdf.rect(margin, yPos - 5, contentWidth, rowHeight, 'F');
     
-    // Lignes du tableau
-    pdf.setFont('helvetica', 'normal');
-    for (const hole of state.holes) {
-      // Vérifier si on doit changer de page
-      if (yPos > pageHeight - 30) {
-        pdf.addPage();
-        yPos = 20;
-      }
-      
-      const holeStats = calculateHoleStats(hole);
-      
-      pdf.text(`${hole.number}`, colX[0], yPos);
-      pdf.text(`${hole.par || 3}`, colX[1], yPos);
-      pdf.text(holeStats.straightDistance ? `${holeStats.straightDistance}m` : '-', colX[2], yPos);
-      pdf.text(holeStats.flightPathDistance ? `${holeStats.flightPathDistance}m` : '-', colX[3], yPos);
-      
+    // Bordures des cellules
+    pdf.setDrawColor(220, 220, 220);
+    pdf.setLineWidth(0.1);
+    pdf.rect(margin, yPos - 5, contentWidth, rowHeight, 'S');
+    
+    // Contenu
+    pdf.setTextColor(52, 73, 94);
+    pdf.text(`${hole.number}`, colX[0], yPos);
+    pdf.setTextColor(41, 128, 185);
+    pdf.text(`${hole.par || 3}`, colX[1], yPos);
+    pdf.setTextColor(52, 73, 94);
+    pdf.text(holeStats.straightDistance ? `${holeStats.straightDistance}m` : '-', colX[2], yPos);
+    pdf.setTextColor(46, 204, 113); // Vert pour trajectoire
+    pdf.text(holeStats.flightPathDistance ? `${holeStats.flightPathDistance}m` : '-', colX[3], yPos);
+    
+    rowIndex++;
       yPos += 6;
     }
     
@@ -522,51 +628,67 @@ export async function exportCourseToPDF(
     for (const hole of state.holes) {
       pdf.addPage();
       
-      // En-tête du trou
+      // Bannière d'en-tête du trou
+      pdf.setFillColor(52, 152, 219); // Bleu clair
+      pdf.rect(0, 0, pageWidth, 30, 'F');
+      
+      // Titre du trou en blanc
       pdf.setFontSize(22);
       pdf.setFont('helvetica', 'bold');
-      pdf.text(`Trou ${hole.number}`, margin, 20);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(`Trou ${hole.number}`, pageWidth / 2, 18, { align: 'center' });
+      pdf.setTextColor(0, 0, 0);
       
       // Calculer les statistiques du trou
       const holeStats = calculateHoleStats(hole);
       
+      // Carte d'informations du trou
+      yPos = 40;
+      pdf.setFillColor(236, 240, 241);
+      pdf.roundedRect(margin, yPos, contentWidth / 2, 30, 3, 3, 'F');
+      
+      yPos += 10;
+      
       // Statistiques du trou
       pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'normal');
-      yPos = 30;
-      
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Par :', margin, yPos);
+      pdf.setTextColor(52, 73, 94);
+      pdf.text('Par :', margin + 5, yPos);
       pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(41, 128, 185);
       pdf.text(`${hole.par || 3}`, margin + 25, yPos);
       
-      yPos += 7;
+      yPos += 8;
       
       // Distance à vol d'oiseau
       if (holeStats.straightDistance) {
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Distance (vol d\'oiseau) :', margin, yPos);
+        pdf.setTextColor(52, 73, 94);
+        pdf.text('Distance (vol d\'oiseau) :', margin + 5, yPos);
         pdf.setFont('helvetica', 'normal');
-        pdf.text(`${holeStats.straightDistance} m`, margin + 60, yPos);
-        yPos += 7;
+        pdf.setTextColor(41, 128, 185);
+        pdf.text(`${holeStats.straightDistance} m`, margin + 65, yPos);
+        yPos += 8;
       }
       
       // Distance trajectoire (si flight path existe)
       if (holeStats.flightPathDistance) {
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Distance (trajectoire) :', margin, yPos);
+        pdf.setTextColor(52, 73, 94);
+        pdf.text('Distance (trajectoire) :', margin + 5, yPos);
         pdf.setFont('helvetica', 'normal');
-        pdf.text(`${holeStats.flightPathDistance} m`, margin + 60, yPos);
-        yPos += 7;
+        pdf.setTextColor(46, 204, 113); // Vert
+        pdf.text(`${holeStats.flightPathDistance} m`, margin + 65, yPos);
       }
       
-      yPos += 5;
+      pdf.setTextColor(0, 0, 0);
+      yPos = 80;
       
       // Capturer la carte pour ce trou avec zoom
       console.log(`📷 Capture du trou ${hole.number} avec zoom...`);
       
       try {
-        const { dataUrl, width, height } = await captureMap(mapInstance, mapContainer, hole);
+        const { dataUrl, width, height } = await captureMap(mapInstance, mapContainer, hole, state.holes);
         
         // Dimensions max pour la carte (conserver les proportions)
         const maxMapWidth = contentWidth;

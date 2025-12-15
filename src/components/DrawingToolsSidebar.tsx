@@ -17,6 +17,7 @@ import { useMapContext } from '../contexts/MapContext';
 import { lineString, bezierSpline, length } from '@turf/turf';
 import generateKMLContent from '../utils/kml';
 import { exportCourseToPDF } from '../utils/pdf-export-simple';
+import { exportCourseToDocx } from '../utils/docx-export';
 
 
 const DrawingToolsSidebar = () => {
@@ -156,12 +157,59 @@ const DrawingToolsSidebar = () => {
         return;
       }
       
-      console.log('🚀 Lancement export PDF avec leaflet-image...');
+      // Export direct sans éditeur
+      const mapInstance = mapRef.current;
+      const mapContainer = mapInstance.getContainer();
+      
+      await exportCourseToPDF(
+        state,
+        mapInstance,
+        mapContainer
+      );
+      
+      console.log('✅ PDF exporté avec succès');
+    } catch (e) {
+      console.error("❌ Erreur lors de l'export PDF:", e);
+      alert(`Erreur: ${e}`);
+    }
+  };
+
+  const handlePDFExport = async (config: any) => {
+    try {
+      console.log('🚀 Génération PDF avec config:', config);
       await exportCourseToPDF(state, mapRef.current);
+      setPdfEditorOpen(false);
       alert('✅ PDF exporté avec succès !');
     } catch (e) {
       console.error("❌ Erreur lors de l'exportation PDF:", e);
       alert(`Erreur lors de l'export PDF: ${e}`);
+    }
+  };
+
+  const handleExportDOCX = async () => {
+    try {
+      console.log('📝 mapRef:', mapRef);
+      console.log('📝 mapRef.current:', mapRef.current);
+      
+      if (!mapRef || !mapRef.current) {
+        console.error('❌ Instance de carte non trouvée');
+        alert('Erreur: La carte n\'est pas disponible pour l\'export');
+        return;
+      }
+      
+      const mapInstance = mapRef.current;
+      const mapContainer = mapInstance.getContainer();
+      
+      await exportCourseToDocx(
+        state,
+        mapInstance,
+        mapContainer
+      );
+      
+      console.log('✅ DOCX exporté avec succès');
+    } catch (e) {
+      console.error("❌ Erreur lors de l'export DOCX:", e);
+      alert(`Erreur: ${e}`);
     }
   };
 
@@ -513,6 +561,14 @@ const DrawingToolsSidebar = () => {
           color="primary"
         >
           Exporter PDF
+        </Button>
+        <Button 
+          size="small" 
+          variant="outlined" 
+          onClick={handleExportDOCX}
+          sx={{ color: '#2E7D32', borderColor: '#2E7D32', '&:hover': { borderColor: '#1B5E20', backgroundColor: '#E8F5E9' } }}
+        >
+          📄 Exporter DOCX
         </Button>
         <Divider sx={{ my: 1 }}>
           <Typography variant="caption" color="text.secondary">Importer</Typography>
