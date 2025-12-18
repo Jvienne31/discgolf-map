@@ -60,9 +60,9 @@ function calculateOverallStats(holes: CourseHole[]) {
 }
 
 /**
- * Recadre une image pour enlever les zones vides (trim) - copié du PDF
+ * Recadre une image en fonction des positions GPS du tee et basket
  */
-async function trimImage(dataUrl: string): Promise<{dataUrl: string, width: number, height: number}> {
+async function trimImage(dataUrl: string, hole?: CourseHole, mapInstance?: any, mapContainer?: HTMLElement): Promise<{dataUrl: string, width: number, height: number}> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -78,57 +78,73 @@ async function trimImage(dataUrl: string): Promise<{dataUrl: string, width: numb
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
       
-      // Obtenir les pixels
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const pixels = imageData.data;
+      let top = 0;
+      let bottom = canvas.height;
+      let left = 0;
+      let right = canvas.width;
       
-      // Couleur de fond à détecter (#f5f5f5 = rgb(245, 245, 245))
-      const bgColor = { r: 245, g: 245, b: 245 };
-      const tolerance = 15; // Tolérance augmentée
-      
-      // Trouver les limites du contenu non-vide
-      let top = canvas.height;
-      let bottom = 0;
-      let left = canvas.width;
-      let right = 0;
-      
-      for (let y = 0; y < canvas.height; y++) {
-        for (let x = 0; x < canvas.width; x++) {
-          const i = (y * canvas.width + x) * 4;
-          const r = pixels[i];
-          const g = pixels[i + 1];
-          const b = pixels[i + 2];
+      // Si on a les données du trou et de la carte, calculer les positions pixel
+      if (hole && mapInstance && mapContainer) {
+        const tee = hole.elements.find(el => el.type === 'tee');
+        const basket = hole.elements.find(el => el.type === 'basket');
+        const flightPath = hole.elements.find(el => el.type === 'flight-path');
+        
+        const positions: [number, number][] = [];
+        
+        if (tee?.position) {
+          const point = mapInstance.latLngToContainerPoint([tee.position.lat, tee.position.lng]);
+          positions.push([point.x, point.y]);
+        }
+        if (basket?.position) {
+          const point = mapInstance.latLngToContainerPoint([basket.position.lat, basket.position.lng]);
+          positions.push([point.x, point.y]);
+        }
+        if (flightPath?.path) {
+          flightPath.path.forEach(p => {
+            const point = mapInstance.latLngToContainerPoint([p.lat, p.lng]);
+            positions.push([point.x, point.y]);
+          });
+        }
+        
+        if (positions.length > 0) {
+          const xs = positions.map(p => p[0]);
+          const ys = positions.map(p => p[1]);
           
-          // Vérifier si ce pixel n'est pas du fond
-          if (Math.abs(r - bgColor.r) > tolerance || 
-              Math.abs(g - bgColor.g) > tolerance || 
-              Math.abs(b - bgColor.b) > tolerance) {
-            if (y < top) top = y;
-            if (y > bottom) bottom = y;
-            if (x < left) left = x;
-            if (x > right) right = x;
+          left = Math.floor(Math.min(...xs));
+          right = Math.ceil(Math.max(...xs));
+          top = Math.floor(Math.min(...ys));
+          bottom = Math.ceil(Math.max(...ys));
+          
+          // Ajouter une marge de 5% pour bien voir les éléments
+          const marginX = Math.floor((right - left) * 0.05);
+          const marginY = Math.floor((bottom - top) * 0.05);
+          
+          top = Math.max(0, top - marginY);
+          bottom = Math.min(canvas.height - 1, bottom + marginY);
+          left = Math.max(0, left - marginX);
+          right = Math.min(canvas.width - 1, right + marginX);
+          
+          // Forcer un ratio 4:3 pour garantir la cohérence entre les trous
+          let width = right - left + 1;
+          let height = bottom - top + 1;
+          const targetRatio = 4 / 3;
+          const currentRatio = width / height;
+          
+          if (currentRatio > targetRatio) {
+            // Trop large, augmenter la hauteur
+            const newHeight = width / targetRatio;
+            const heightDiff = newHeight - height;
+            top = Math.max(0, Math.floor(top - heightDiff / 2));
+            bottom = Math.min(canvas.height - 1, Math.floor(bottom + heightDiff / 2));
+          } else if (currentRatio < targetRatio) {
+            // Trop haut, augmenter la largeur
+            const newWidth = height * targetRatio;
+            const widthDiff = newWidth - width;
+            left = Math.max(0, Math.floor(left - widthDiff / 2));
+            right = Math.min(canvas.width - 1, Math.floor(right + widthDiff / 2));
           }
         }
       }
-      
-      // Si aucun contenu trouvé, retourner l'image originale
-      if (top >= bottom || left >= right) {
-        resolve({
-          dataUrl: dataUrl,
-          width: img.width,
-          height: img.height
-        });
-        return;
-      }
-      
-      // Ajouter une marge proportionnelle (5% de chaque dimension)
-      const marginY = Math.floor((bottom - top) * 0.05);
-      const marginX = Math.floor((right - left) * 0.05);
-      
-      top = Math.max(0, top - marginY);
-      bottom = Math.min(canvas.height - 1, bottom + marginY);
-      left = Math.max(0, left - marginX);
-      right = Math.min(canvas.width - 1, right + marginX);
       
       // Créer un nouveau canvas avec les dimensions recadrées
       const croppedWidth = right - left + 1;
@@ -151,15 +167,140 @@ async function trimImage(dataUrl: string): Promise<{dataUrl: string, width: numb
         0, 0, croppedWidth, croppedHeight
       );
       
+      // Ajouter du padding pour atteindre une taille fixe (ratio 4:3)
+      const targetWidth = 800;
+      const targetHeight = 600;
+      
+      // Calculer le ratio pour fit le contenu
+      const scaleX = targetWidth / croppedWidth;
+      const scaleY = targetHeight / croppedHeight;
+      const scale = Math.min(scaleX, scaleY, 1); // Ne pas agrandir, seulement réduire si nécessaire
+      
+      const scaledWidth = Math.floor(croppedWidth * scale);
+      const scaledHeight = Math.floor(croppedHeight * scale);
+      
+      // Centrer le contenu
+      const offsetX = Math.floor((targetWidth - scaledWidth) / 2);
+      const offsetY = Math.floor((targetHeight - scaledHeight) / 2);
+      
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = targetWidth;
+      finalCanvas.height = targetHeight;
+      const finalCtx = finalCanvas.getContext('2d');
+      
+      if (!finalCtx) {
+        reject(new Error('Unable to get final canvas context'));
+        return;
+      }
+      
+      // Fond blanc
+      finalCtx.fillStyle = '#ffffff';
+      finalCtx.fillRect(0, 0, targetWidth, targetHeight);
+      
+      // Dessiner le contenu centré
+      finalCtx.drawImage(
+        croppedCanvas,
+        0, 0, croppedWidth, croppedHeight,
+        offsetX, offsetY, scaledWidth, scaledHeight
+      );
+      
       resolve({
-        dataUrl: croppedCanvas.toDataURL('image/jpeg', 0.95),
-        width: croppedWidth,
-        height: croppedHeight
+        dataUrl: finalCanvas.toDataURL('image/jpeg', 0.95),
+        width: targetWidth,
+        height: targetHeight
       });
     };
     img.onerror = reject;
     img.src = dataUrl;
   });
+}
+
+/**
+ * Masque temporairement les éléments qui n'appartiennent pas au trou spécifié
+ * Retourne une fonction pour restaurer la visibilité
+ */
+function hideOtherHoles(
+  mapInstance: any,
+  currentHoleNumber: number,
+  allHoles: CourseHole[]
+): () => void {
+  const hiddenLayers: Array<{ layer: any, originalStyle: any }> = [];
+  
+  // Récupérer les coordonnées du trou actuel pour les identifier
+  const currentHole = allHoles.find(h => h.number === currentHoleNumber);
+  if (!currentHole) return () => {};
+  
+  const currentPositions = new Set<string>();
+  currentHole.elements.forEach(el => {
+    if (el.position) {
+      const key = `${el.position.lat.toFixed(6)},${el.position.lng.toFixed(6)}`;
+      currentPositions.add(key);
+    }
+    if (el.path) {
+      el.path.forEach(p => {
+        const key = `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
+        currentPositions.add(key);
+      });
+    }
+  });
+
+  // Parcourir tous les layers de la carte
+  mapInstance.eachLayer((layer: any) => {
+    // Ignorer les layers de base (tiles)
+    if (!layer.getLatLng && !layer.getLatLngs) return;
+    
+    let belongsToCurrentHole = false;
+    
+    // Vérifier si le layer appartient au trou actuel
+    if (layer.getLatLng) {
+      const latlng = layer.getLatLng();
+      const key = `${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}`;
+      belongsToCurrentHole = currentPositions.has(key);
+    } else if (layer.getLatLngs) {
+      const latlngs = layer.getLatLngs();
+      const flat = Array.isArray(latlngs[0]) ? latlngs.flat() : latlngs;
+      belongsToCurrentHole = flat.some((ll: any) => {
+        if (ll.lat !== undefined) {
+          const key = `${ll.lat.toFixed(6)},${ll.lng.toFixed(6)}`;
+          return currentPositions.has(key);
+        }
+        return false;
+      });
+    }
+    
+    // Si le layer n'appartient pas au trou actuel, le masquer
+    if (!belongsToCurrentHole) {
+      const originalStyle: any = {};
+      
+      if (layer.options) {
+        originalStyle.opacity = layer.options.opacity ?? 1;
+        originalStyle.fillOpacity = layer.options.fillOpacity ?? 0.4;
+      }
+      
+      hiddenLayers.push({ layer, originalStyle });
+      
+      // Masquer le layer
+      if (layer.setStyle) {
+        layer.setStyle({ opacity: 0, fillOpacity: 0 });
+      } else if (layer.setOpacity) {
+        layer.setOpacity(0);
+      }
+    }
+  });
+
+  // Retourner une fonction pour restaurer
+  return () => {
+    hiddenLayers.forEach(({ layer, originalStyle }) => {
+      if (layer.setStyle) {
+        layer.setStyle({ 
+          opacity: originalStyle.opacity, 
+          fillOpacity: originalStyle.fillOpacity 
+        });
+      } else if (layer.setOpacity) {
+        layer.setOpacity(originalStyle.opacity);
+      }
+    });
+  };
 }
 
 /**
@@ -171,6 +312,13 @@ async function captureMap(
   hole?: CourseHole,
   allHoles?: CourseHole[]
 ): Promise<Uint8Array> {
+  
+  let restoreVisibility: (() => void) | null = null;
+  
+  // Si un trou est spécifié, masquer les autres trous
+  if (hole && allHoles) {
+    restoreVisibility = hideOtherHoles(mapInstance, hole.number, allHoles);
+  }
   
   // Si un trou est spécifié, zoomer dessus avec cadrage adaptatif
   if (hole) {
@@ -198,8 +346,8 @@ async function captureMap(
       const minLng = Math.min(...lngs);
       const maxLng = Math.max(...lngs);
       
-      // Ajouter une marge minimale de 3 mètres de chaque côté
-      const marginMeters = 3;
+      // Marge minimale de 1 mètre
+      const marginMeters = 1;
       const marginLat = marginMeters / 111000; // ~111km par degré
       const marginLng = marginMeters / (111000 * Math.cos((minLat + maxLat) / 2 * Math.PI / 180));
       
@@ -208,11 +356,15 @@ async function captureMap(
         [maxLat + marginLat, maxLng + marginLng]
       ];
       
-      // fitBounds SANS padding automatique et SANS limite de zoom
-      mapInstance.fitBounds(bounds, { 
-        padding: [0, 0],
-        animate: false 
-      });
+      // Calculer le zoom optimal avec getBoundsZoom
+      const zoom = mapInstance.getBoundsZoom(bounds, false, [0, 0]);
+      const center = [
+        (minLat + maxLat) / 2,
+        (minLng + maxLng) / 2
+      ];
+      
+      // Appliquer le zoom (Leaflet arrondit à l'entier)
+      mapInstance.setView(center, zoom, { animate: false });
     }
   } else if (allHoles && allHoles.length > 0) {
     // Vue complète du parcours - analyser tous les tees et paniers
@@ -293,8 +445,13 @@ async function captureMap(
   
   // Recadrer l'image pour enlever les zones vides (trim)
   if (hole) {
-    const trimResult = await trimImage(dataUrl);
+    const trimResult = await trimImage(dataUrl, hole, mapInstance, mapContainer);
     dataUrl = trimResult.dataUrl;
+  }
+
+  // Restaurer la visibilité des autres trous
+  if (restoreVisibility) {
+    restoreVisibility();
   }
 
   // Convertir dataUrl en Uint8Array
